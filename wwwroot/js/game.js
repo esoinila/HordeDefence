@@ -318,6 +318,7 @@ function hasLOS(x0, y0, x1, y1) {
     let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     let err = dx + dy, e2;
     while (true) {
+        if (x0 < 0 || x0 >= COLS || y0 < 0 || y0 >= ROWS) return false;
         if (x0 === x1 && y0 === y1) break;
         let t = terrain[x0][y0];
         let d = grid[x0][y0];
