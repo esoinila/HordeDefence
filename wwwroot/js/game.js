@@ -739,7 +739,39 @@ function update() {
         
         if (h.slipTime > 0) {
             h.slipTime--; h.spin += 0.3; 
-            h.x += h.slipDirX * 4; h.y += h.slipDirY * 4;
+            
+            h.x += h.slipDirX * 4; 
+            h.y += h.slipDirY * 4;
+            
+            let scx = Math.floor((h.x + 10) / CELL_SIZE);
+            let scy = Math.floor((h.y + 10) / CELL_SIZE);
+            if (scx >= 0 && scx < COLS && scy >= 0 && scy < ROWS) {
+                 let sT = terrain[scx][scy];
+                 let sD = grid[scx][scy];
+                 let isWall = sT === 2 || sT === 3 || (sD && (sD.type === 'trench' || sD.type === 'maxim'));
+                 let isMoat = sD && sD.type === 'moat';
+                 
+                 if (isWall) {
+                      // Bounce physically!
+                      h.x -= h.slipDirX * 4; h.y -= h.slipDirY * 4;
+                      h.slipDirX *= -1; h.slipDirY *= -1;
+                 } else if (isMoat) {
+                      // Fall straight into the moat!
+                      sD.capacity--;
+                      createParticles(h.x, h.y, 'red', 10);
+                      horde.splice(i, 1);
+                      supplies++;
+                      if (sD.capacity <= 0) {
+                          grid[scx][scy] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
+                          log(`Moat filled! The horde created a makeshift bridge!`, 'error');
+                      }
+                      continue; 
+                 } else if (sD && sD.type === 'wire') {
+                      // Barbed wire tangles slipping!
+                      h.slipTime -= 3; 
+                      h.x -= h.slipDirX * 3; h.y -= h.slipDirY * 3; // Moves sluggishly through wire
+                 }
+            }
             continue; 
         } else {
             h.spin = 0; 
