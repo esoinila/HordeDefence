@@ -36,6 +36,8 @@ let hoverY = -1;
 
 // DOM Elements
 const canvas = document.getElementById('gameCanvas');
+canvas.width = CANVAS_W;
+canvas.height = CANVAS_H;
 const ctx = canvas.getContext('2d');
 const suppliesDisplay = document.getElementById('suppliesDisplay');
 const phaseDisplay = document.getElementById('phaseDisplay');
