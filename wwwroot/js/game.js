@@ -31,6 +31,8 @@ let spawnedHorde = 0;
 let gameOver = false;
 let victory = false;
 let savedGrid = null; // Stores defense layout exactly as it was when the wave started
+let hoverX = -1;
+let hoverY = -1;
 
 // DOM Elements
 const canvas = document.getElementById('gameCanvas');
@@ -119,6 +121,28 @@ buildBtns.forEach(btn => {
 });
 
 // Canvas Interactions
+canvas.addEventListener('mousemove', (e) => {
+    if (phase !== 'entrench') return;
+    const rect = canvas.getBoundingClientRect();
+    const ex = e.clientX - rect.left;
+    const ey = e.clientY - rect.top;
+    
+    let oldX = hoverX;
+    let oldY = hoverY;
+    hoverX = Math.floor(ex / CELL_SIZE);
+    hoverY = Math.floor(ey / CELL_SIZE);
+    
+    if (hoverX !== oldX || hoverY !== oldY) {
+        draw();
+    }
+});
+
+canvas.addEventListener('mouseout', () => {
+    if (phase !== 'entrench') return;
+    hoverX = -1; hoverY = -1;
+    draw();
+});
+
 canvas.addEventListener('mousedown', (e) => {
     if (phase !== 'entrench') return;
     
@@ -381,6 +405,7 @@ function getFlowField() {
                     // This creates a global gradient that funnels horde to the "weakest" block to concentrate attacks!
                     if (cellDef.type === 'trench') cost += 500;
                     if (cellDef.type === 'moat') cost += 300;
+                    if (cellDef.type === 'maxim') cost += 1000;
                 }
                 
                 cost += dangerMap[nx][ny]; // Avoid Maxim lines of sight
@@ -614,16 +639,17 @@ function update() {
                 }
             }
             
-            // Check if the target cell is a solid blocking defense (Trench or Moat)
+            // Check if the target cell is a solid blocking defense (Trench or Moat or Maxim)
             let targetDef = grid[bestX][bestY];
-            if (targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat')) {
+            if (targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat' || targetDef.type === 'maxim')) {
                 // Cannot move into it, must demolish!
-                if (targetDef.type === 'trench') {
+                if (targetDef.type === 'trench' || targetDef.type === 'maxim') {
                     targetDef.hp -= 0.5; // Many horde attacking = fast demolition
                     createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, 'brown', 1);
                     if (targetDef.hp <= 0) {
+                        let msg = targetDef.type === 'maxim' ? "A Maxim Gun was destroyed in melee!" : "Trench breached by the horde!";
                         grid[bestX][bestY] = null;
-                        log("Trench breached by the horde!", 'error');
+                        log(msg, 'error');
                         createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, '#888', 20);
                     }
                 } else if (targetDef.type === 'moat') {
@@ -678,6 +704,53 @@ function createParticles(x, y, color, count) {
             life: 10 + Math.random() * 15, color: color
         });
     }
+}
+
+function drawLineOfSight(gx, gy) {
+    let cx = gx * CELL_SIZE + 20;
+    let cy = gy * CELL_SIZE + 20;
+    let range = DEFENSES.maxim.range;
+    
+    // Draw sweeping polygon for line of sight
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    
+    for (let angle = 0; angle <= Math.PI * 2; angle += 0.05) {
+        let hitX = cx + Math.cos(angle) * range;
+        let hitY = cy + Math.sin(angle) * range;
+        
+        // Raymarch
+        let steps = 40; 
+        for (let i = 1; i <= steps; i++) {
+            let chkX = cx + (Math.cos(angle) * range) * (i / steps);
+            let chkY = cy + (Math.sin(angle) * range) * (i / steps);
+            
+            let gridX = Math.floor(chkX / CELL_SIZE);
+            let gridY = Math.floor(chkY / CELL_SIZE);
+            
+            if (gridX >= 0 && gridX < COLS && gridY >= 0 && gridY < ROWS) {
+                let cellT = terrain[gridX][gridY];
+                let cellD = grid[gridX][gridY];
+                let isWall = cellT === 2 || cellT === 3 || (cellD && cellD.type === 'trench');
+                // Don't count the cell the maxim is literally on!
+                if (isWall && (gridX !== gx || gridY !== gy)) {
+                    hitX = chkX; hitY = chkY;
+                    break;
+                }
+            } else {
+                hitX = chkX; hitY = chkY;
+                break; // Screen edge
+            }
+        }
+        ctx.lineTo(hitX, hitY);
+    }
+    ctx.lineTo(cx, cy);
+    ctx.fill();
+    
+    // Range circle
+    ctx.strokeStyle = 'rgba(255, 255, 0, 0.4)';
+    ctx.beginPath(); ctx.arc(cx, cy, range, 0, Math.PI * 2); ctx.stroke();
 }
 
 function draw() {
@@ -750,13 +823,25 @@ function draw() {
         }
     }
     
-    // Draw spawns highlights
     if (phase === 'entrench') {
          ctx.fillStyle = 'rgba(255,0,0,0.1)';
          ctx.fillRect(0, 0, CANVAS_W, CELL_SIZE);
          ctx.fillRect(0, CANVAS_H - CELL_SIZE, CANVAS_W, CELL_SIZE);
          ctx.fillRect(0, 0, CELL_SIZE, CANVAS_H);
          ctx.fillRect(CANVAS_W - CELL_SIZE, 0, CELL_SIZE, CANVAS_H);
+         
+         if (hoverX >= 0 && hoverX < COLS && hoverY >= 0 && hoverY < ROWS) {
+             let isMaxim = selectedTool === 'maxim';
+             if (grid[hoverX][hoverY] && grid[hoverX][hoverY].type === 'maxim') {
+                 isMaxim = true; // Hovering over an already built maxim
+             }
+             if (isMaxim) {
+                 drawLineOfSight(hoverX, hoverY);
+             }
+             
+             ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+             ctx.strokeRect(hoverX*CELL_SIZE, hoverY*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+         }
     }
     
     if (phase === 'battle') {
