@@ -467,7 +467,11 @@ function update() {
     // Recalculate Flow Field occasionally so they react to broken trenches
     if (spawnTicks % 30 === 0) flowField = getFlowField();
     
-    if (spawnedHorde < maxHorde && spawnTicks % 20 === 0) spawnHorde();
+    // Dynamic Spawn Interval: The whole wave ALWAYS completes spawning in ~13 seconds (800 frames)
+    // For maxHorde=40, it's 20 frames. For maxHorde=60, it's 13 frames. This compresses larger waves to saturate defenses!
+    let spawnInterval = Math.max(2, Math.floor(800 / maxHorde));
+    
+    if (spawnedHorde < maxHorde && spawnTicks % spawnInterval === 0) spawnHorde();
     
     // --- TOWERS (Maxims) ---
     for (let x = 0; x < COLS; x++) {
