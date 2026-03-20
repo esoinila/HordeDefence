@@ -216,7 +216,9 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 function updateSupplies() {
-    suppliesDisplay.innerText = supplies;
+    if (suppliesDisplay.innerText !== supplies.toString()) {
+        suppliesDisplay.innerText = supplies;
+    }
 }
 
 function saveGridState() {
@@ -604,6 +606,7 @@ function update() {
                         createParticles(h.x, h.y, 'red', 4);
                         if (h.hp <= 0) {
                             horde.splice(j, 1);
+                            supplies++;
                             totalKills++; if (totalKills % 10 === 0) log(`Kills: ${totalKills}`, 'kill');
                         }
                         if (b.pierceLeft <= 0) break;
@@ -654,6 +657,7 @@ function update() {
                   if (Math.random() < 0.2) log("A horde member slipped and fell to the crocs!", 'error'); 
              }
              horde.splice(i, 1);
+             supplies++;
              continue;
         }
         
@@ -745,6 +749,7 @@ function update() {
                             waterEaten[k] = (waterEaten[k] || 0) + 1;
                             createParticles(h.x, h.y, '#1e90ff', 10);
                             horde.splice(i, 1);
+                            supplies++;
                             if (waterEaten[k] >= 5) {
                                 grid[bestX][bestY] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
                                 log("The crocodiles are full! The pond became a gruesome bridge!", "error");
@@ -753,6 +758,7 @@ function update() {
                             targetDef.capacity--;
                             createParticles(h.x, h.y, 'red', 10);
                             horde.splice(i, 1);
+                            supplies++;
                             if (targetDef.capacity <= 0) {
                                 grid[bestX][bestY] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
                                 log(`Moat filled! The horde created a makeshift bridge!`, 'error');
@@ -782,6 +788,7 @@ function update() {
         restartBtn.style.display = 'block';
     }
     updateParticles();
+    updateSupplies();
 }
 
 function updateParticles() {
