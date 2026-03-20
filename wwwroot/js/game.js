@@ -324,8 +324,8 @@ function hasLOS(x0, y0, x1, y1) {
         if (x0 === x1 && y0 === y1) break;
         let t = terrain[x0][y0];
         let d = grid[x0][y0];
-        // Line of sight blocked by Rock (2), Castle (3), or Trench
-        if (t === 2 || t === 3 || (d && d.type === 'trench')) return false; 
+        // Line of sight blocked by Rock (2), Castle (3)
+        if (t === 2 || t === 3) return false; 
         
         e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
@@ -577,20 +577,14 @@ function update() {
         let b = bullets[i];
         b.x += b.vx; b.y += b.vy;
         
-        // Obstacle Collision for Bullets (Rocks, Trenches, Castle)
+        // Obstacle Collision for Bullets (Rocks, Castle)
         let bx = Math.floor(b.x / CELL_SIZE);
         let by = Math.floor(b.y / CELL_SIZE);
         if (bx >= 0 && bx < COLS && by >= 0 && by < ROWS) {
             let t = terrain[bx][by];
-            let d = grid[bx][by];
-            if (t === 2 || t === 3 || (d && d.type === 'trench')) {
+            if (t === 2 || t === 3) {
                 b.pierceLeft = 0; 
                 createParticles(b.x, b.y, '#888', 5); 
-                
-                if (d && d.type === 'trench') {
-                    d.hp -= 2;
-                    if (d.hp <= 0) grid[bx][by] = null;
-                }
             }
         }
         
@@ -835,7 +829,7 @@ function drawLineOfSight(gx, gy) {
             if (gridX >= 0 && gridX < COLS && gridY >= 0 && gridY < ROWS) {
                 let cellT = terrain[gridX][gridY];
                 let cellD = grid[gridX][gridY];
-                let isWall = cellT === 2 || cellT === 3 || (cellD && cellD.type === 'trench');
+                let isWall = cellT === 2 || cellT === 3;
                 // Don't count the cell the maxim is literally on!
                 if (isWall && (gridX !== gx || gridY !== gy)) {
                     hitX = chkX; hitY = chkY;
