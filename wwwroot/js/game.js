@@ -1,6 +1,6 @@
 // Game Constants
-const COLS = 20;
-const ROWS = 10;
+const COLS = 16;
+const ROWS = 16;
 const CELL_SIZE = 40;
 const CANVAS_W = COLS * CELL_SIZE;
 const CANVAS_H = ROWS * CELL_SIZE;
@@ -57,22 +57,21 @@ function generateTerrain() {
     }
     
     // Castle Keep in center (2x2)
-    terrain[9][4] = 3; terrain[10][4] = 3;
-    terrain[9][5] = 3; terrain[10][5] = 3;
+    terrain[7][7] = 3; terrain[8][7] = 3;
+    terrain[7][8] = 3; terrain[8][8] = 3;
 
     // Generate clumped natural choke points using random walkers
-    let numFeatures = 8; 
+    let numFeatures = 12; 
     for(let i=0; i<numFeatures; i++) {
-        let type = Math.random() > 0.4 ? 2 : 1; // 60% Rock, 40% Water
-        let length = 5 + Math.floor(Math.random() * 8); // Snake length
+        let type = Math.random() > 0.4 ? 2 : 1; 
+        let length = 5 + Math.floor(Math.random() * 8); 
         
         let cx = Math.floor(Math.random() * COLS);
         let cy = Math.floor(Math.random() * ROWS);
         
         for(let step = 0; step < length; step++) {
-            // Keep in bounds and don't overwrite Castle
             if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS) {
-                let isCastle = (cx >= 8 && cx <= 11 && cy >= 3 && cy <= 6);
+                let isCastle = (cx >= 6 && cx <= 9 && cy >= 6 && cy <= 9); // Buffer zone
                 let isEdge = (cx === 0 || cx === COLS-1 || cy === 0 || cy === ROWS-1);
                 if (!isCastle && !isEdge) {
                     terrain[cx][cy] = type;
@@ -373,9 +372,9 @@ function getFlowField() {
     }
     
     let queue = [];
-    distances[9][4] = 0; distances[10][4] = 0;
-    distances[9][5] = 0; distances[10][5] = 0;
-    queue.push({x:9, y:4}, {x:10, y:4}, {x:9, y:5}, {x:10, y:5});
+    distances[7][7] = 0; distances[8][7] = 0;
+    distances[7][8] = 0; distances[8][8] = 0;
+    queue.push({x:7, y:7}, {x:8, y:7}, {x:7, y:8}, {x:8, y:8});
     
     while(queue.length > 0) {
         let curr = queue.shift();
@@ -445,7 +444,7 @@ function explodeCastle() {
         castleExplosion = 1;
         for(let i=0; i<300; i++) {
             particles.push({
-                x: 10 * CELL_SIZE, y: 5 * CELL_SIZE,
+                x: 8 * CELL_SIZE, y: 8 * CELL_SIZE,
                 vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20,
                 life: 30 + Math.random() * 50,
                 color: Math.random() > 0.5 ? 'red' : 'orange'
@@ -798,8 +797,8 @@ function draw() {
     }
     
     if (!castleExplosion) {
-        ctx.fillStyle = '#444'; ctx.fillRect(9*CELL_SIZE + 10, 4*CELL_SIZE + 10, 2*CELL_SIZE - 20, 2*CELL_SIZE - 20);
-        ctx.fillStyle = 'black'; ctx.fillRect(9*CELL_SIZE + 30, 5*CELL_SIZE - 10, 20, 20); 
+        ctx.fillStyle = '#444'; ctx.fillRect(7*CELL_SIZE + 10, 7*CELL_SIZE + 10, 2*CELL_SIZE - 20, 2*CELL_SIZE - 20);
+        ctx.fillStyle = 'black'; ctx.fillRect(7*CELL_SIZE + 30, 8*CELL_SIZE - 10, 20, 20); 
     }
     
     ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
