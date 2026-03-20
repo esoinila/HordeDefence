@@ -1,0 +1,65 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Horde Defense";
+}
+
+<div class="game-container text-center">
+    <h1 class="display-4 text-danger mb-3" style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">DEFEND THE LINE</h1>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card bg-dark text-white mb-3">
+                <div class="card-header">
+                    <h3>Command HQ</h3>
+                </div>
+                <div class="card-body">
+                    <h4 class="text-warning">Supplies: <span id="suppliesDisplay">1000</span></h4>
+                    <p>Phase: <span id="phaseDisplay" class="text-info font-weight-bold">Entrenchment</span></p>
+                    <hr class="bg-secondary" />
+                    
+                    <h5>Build Defenses</h5>
+                    <div class="d-grid gap-2 build-menu">
+                        <button class="btn btn-outline-secondary text-start build-btn active" data-type="trench" data-cost="50">
+                            🟫 Trench (50) <small class="d-block text-muted">Blocks path</small>
+                        </button>
+                        <button class="btn btn-outline-secondary text-start build-btn" data-type="wire" data-cost="75">
+                            ➰ Barbed Wire (75) <small class="d-block text-muted">Slows horde</small>
+                        </button>
+                        <button class="btn btn-outline-secondary text-start build-btn" data-type="maxim" data-cost="200">
+                            🔫 Maxim Gun (200) <small class="d-block text-muted">Pierces 7 lines</small>
+                        </button>
+                        <button class="btn btn-outline-secondary text-start build-btn" data-type="moat" data-cost="150">
+                            🕳️ Moat (150) <small class="d-block text-muted">Eats 5 horders</small>
+                        </button>
+                        <button class="btn btn-outline-danger text-start build-btn" data-type="remove" data-cost="0">
+                            🗑️ Demolish <small class="d-block text-muted">Refunds 50%</small>
+                        </button>
+                    </div>
+
+                    <hr class="bg-secondary" />
+                    <button id="startWaveBtn" class="btn btn-danger btn-lg w-100 fw-bold">🚀 LAUNCH HORDE</button>
+                    <button id="restartBtn" class="btn btn-warning btn-sm w-100 mt-2" style="display:none;">Restart Level</button>
+                </div>
+            </div>
+            <div class="alert alert-info small text-start">
+                <strong>Tip:</strong> The horde spawns on the right. Channel them towards your Maxims! Don't block the path entirely, or they will break through.
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <div class="canvas-wrapper bg-dark rounded shadow-lg p-2 d-inline-block">
+                <canvas id="gameCanvas" width="800" height="400" class="border border-secondary"></canvas>
+            </div>
+            
+            <!-- Silly feedback area -->
+            <div id="battleLog" class="text-start mt-3 p-3 bg-light rounded text-dark" style="height: 150px; overflow-y: auto; font-family: monospace;">
+                System: Defenses online. Awaiting entrenchment orders.
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/game.js" asp-append-version="true"></script>
+}
