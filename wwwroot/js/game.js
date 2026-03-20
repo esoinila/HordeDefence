@@ -34,6 +34,9 @@ let savedGrid = null; // Stores defense layout exactly as it was when the wave s
 let hoverX = -1;
 let hoverY = -1;
 let waterEaten = {};
+let smokeMap = [];
+for (let x=0; x<COLS; x++) { smokeMap[x] = []; for (let y=0; y<ROWS; y++) smokeMap[x][y] = 0; }
+let currentDangerMap = null;
 
 // DOM Elements
 const canvas = document.getElementById('gameCanvas');
@@ -269,6 +272,7 @@ function startWave() {
     spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0;
     spawnTicks = 0;
     waterEaten = {};
+    for (let x=0; x<COLS; x++) { for (let y=0; y<ROWS; y++) smokeMap[x][y] = 0; }
     
     log(`THE HORDE IS APPROACHING! (Wave Size: ${maxHorde})`, "wave");
     requestAnimationFrame(gameLoop);
@@ -322,11 +326,13 @@ function hasLOS(x0, y0, x1, y1) {
     let err = dx + dy, e2;
     while (true) {
         if (x0 < 0 || x0 >= COLS || y0 < 0 || y0 >= ROWS) return false;
-        if (x0 === x1 && y0 === y1) break;
+        
         let t = terrain[x0][y0];
-        let d = grid[x0][y0];
-        // Line of sight blocked by Rock (2), Castle (3)
-        if (t === 2 || t === 3) return false; 
+        let isSmoke = smokeMap[x0][y0] > 0;
+        // Line of sight blocked by Rock (2), Castle (3), or Smoke Screen
+        if (t === 2 || t === 3 || isSmoke) return false; 
+        
+        if (x0 === x1 && y0 === y1) break;
         
         e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
@@ -368,6 +374,7 @@ function getDangerMap() {
             }
         }
     }
+    currentDangerMap = dangerMap;
     return dangerMap;
 }
 
@@ -491,6 +498,14 @@ function update() {
     }
     
     spawnTicks++;
+    
+    // Decrease Smoke life
+    for (let x = 0; x < COLS; x++) {
+        for (let y = 0; y < ROWS; y++) {
+            if (smokeMap[x][y] > 0) smokeMap[x][y]--;
+        }
+    }
+    
     // Recalculate Flow Field occasionally so they react to broken trenches
     if (spawnTicks % 30 === 0) flowField = getFlowField();
     
@@ -659,6 +674,19 @@ function update() {
         
         let wiggleX = Math.cos(h.frame * 0.1 + h.wigglePhase) * 0.5;
         let wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
+        
+        // Smoke Tactics! If Horde member is in High Danger LOS but no smoke exists here
+        if (currentDangerMap && currentDangerMap[cx][cy] > 0 && smokeMap[cx][cy] <= 0) {
+            // Very high chance per second (0.02/frame = 120%/sec) to pop smoke and sacrifice
+            if (Math.random() < 0.02) {
+                smokeMap[cx][cy] = 400; // About 6.5 seconds of thick cover!
+                createParticles(h.x + 10, h.y + 10, 'gray', 40);
+                log("A frontline horde member sacrificed themselves to throw a Smoke Screen!", "wave");
+                horde.splice(i, 1);
+                supplies++; // Still get money
+                continue;
+            }
+        }
         
         if (cellTerrain === 3) {
             explodeCastle();
@@ -874,7 +902,8 @@ function drawLineOfSight(gx, gy) {
             if (gridX >= 0 && gridX < COLS && gridY >= 0 && gridY < ROWS) {
                 let cellT = terrain[gridX][gridY];
                 let cellD = grid[gridX][gridY];
-                let isWall = cellT === 2 || cellT === 3;
+                let isSmoke = smokeMap[gridX][gridY] > 0;
+                let isWall = cellT === 2 || cellT === 3 || isSmoke;
                 // Don't count the cell the maxim is literally on!
                 if (isWall && (gridX !== gx || gridY !== gy)) {
                     hitX = chkX; hitY = chkY;
@@ -1048,6 +1077,23 @@ function draw() {
         for (let b of bullets) {
             ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.atan2(b.vy, b.vx));
             ctx.fillRect(-5, -1, 10, 3); ctx.restore();
+        }
+        
+        // --- DRAW SMOKE OVERLAYS ---
+        for (let x = 0; x < COLS; x++) {
+            for (let y = 0; y < ROWS; y++) {
+                if (smokeMap[x][y] > 0) {
+                    ctx.fillStyle = `rgba(120, 120, 120, ${Math.min(0.8, smokeMap[x][y] / 100)})`;
+                    ctx.beginPath();
+                    let px = x * CELL_SIZE + CELL_SIZE/2;
+                    let py = y * CELL_SIZE + CELL_SIZE/2;
+                    // Billowing puffy effect
+                    ctx.arc(px, py, CELL_SIZE * 0.7, 0, Math.PI*2);
+                    ctx.arc(px - 10, py - 10, CELL_SIZE * 0.5, 0, Math.PI*2);
+                    ctx.arc(px + 10, py + 10, CELL_SIZE * 0.5, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
         }
     }
     
