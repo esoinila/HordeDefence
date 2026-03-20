@@ -7,9 +7,9 @@ const CANVAS_H = ROWS * CELL_SIZE;
 
 // Defense Types
 const DEFENSES = {
-    trench: { cost: 20, color: '#8B4513', symbol: '🟫', hp: 100 },
-    wire: { cost: 30, color: '#A9A9A9', symbol: '➰', hp: 50, slow: 0.3 },
-    maxim: { cost: 150, color: '#2F4F4F', symbol: '🔫', hp: 50, fireRate: 10, range: 800, pierce: 4, dmg: 10 },
+    trench: { cost: 20, color: '#8B4513', symbol: '🟫', hp: 200 }, // Tougher to withstand swarms
+    wire: { cost: 30, color: '#A9A9A9', symbol: '➰', hp: 100, slow: 0.3 }, 
+    maxim: { cost: 150, color: '#2F4F4F', symbol: '🔫', hp: 50, fireRate: 10, range: 250, pierce: 4, dmg: 10 }, // Range drastically reduced!
     moat: { cost: 80, color: '#1a3b3a', symbol: '🐊', capacity: 5 },
     oil:  { cost: 30, color: '#111111', symbol: '🛢️', hp: 50 },
     bridge: { cost: 50, color: '#D2691E', symbol: '🌉', hp: 100 }
@@ -210,13 +210,12 @@ function hasLOS(x0, y0, x1, y1) {
     let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     let err = dx + dy, e2;
-    // Walk the line
     while (true) {
         if (x0 === x1 && y0 === y1) break;
-        // Ignore the start and end point itself for blocking
         let t = terrain[x0][y0];
         let d = grid[x0][y0];
-        if (t === 2 || (d && d.type === 'trench')) return false; // Line of sight blocked by Rock or Trench
+        // Line of sight blocked by Rock (2), Castle (3), or Trench
+        if (t === 2 || t === 3 || (d && d.type === 'trench')) return false; 
         
         e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
@@ -266,7 +265,7 @@ function getFlowField() {
     let distances = [];
     for (let x = 0; x < COLS; x++) {
         distances[x] = [];
-        for (let y = 0; y < ROWS; y++) distances[x][y] = 9999;
+        for (let y = 0; y < ROWS; y++) distances[x][y] = 999999;
     }
     
     let queue = [];
@@ -276,6 +275,7 @@ function getFlowField() {
     
     while(queue.length > 0) {
         let curr = queue.shift();
+        let currDist = distances[curr.x][curr.y];
         
         let dirs = [[-1,0], [1,0], [0,-1], [0,1], [-1,-1], [-1,1], [1,-1], [1,1]];
         for(let d of dirs) {
@@ -286,20 +286,28 @@ function getFlowField() {
                 let cellTerrain = terrain[nx][ny];
                 let cellDef = grid[nx][ny];
                 
-                let blocked = cellDef && (cellDef.type === 'trench' || cellDef.type === 'moat');
-                if (cellTerrain === 2) blocked = true; 
-                if (cellTerrain === 1 && (!cellDef || cellDef.type !== 'bridge')) blocked = true; 
+                // Purely blocked terrain: Solid rock, water with no bridge
+                if (cellTerrain === 2) continue; 
+                if (cellTerrain === 1 && (!cellDef || cellDef.type !== 'bridge')) continue; 
                 
-                if (!blocked) {
-                    let cost = cellDef && cellDef.type === 'wire' ? 5 : 1; 
-                    if (d[0] !== 0 && d[1] !== 0) cost *= 1.4; 
-                    
-                    cost += dangerMap[nx][ny]; // <--- Horde avoids Maxim lines of sight! (Cover mechanics)
-                    
-                    if (distances[curr.x][curr.y] + cost < distances[nx][ny]) {
-                        distances[nx][ny] = distances[curr.x][curr.y] + cost;
-                        queue.push({x: nx, y: ny});
-                    }
+                // Calculate movement cost
+                let cost = 1; 
+                if (d[0] !== 0 && d[1] !== 0) cost = 1.4; // diagonal penalty
+                
+                if (cellDef) {
+                    if (cellDef.type === 'wire') cost += 10;
+                    if (cellDef.type === 'oil') cost += 5;
+                    // TRENCHES AND MOATS ARE NO LONGER BLOCKED. They have a High Cost! 
+                    // This creates a global gradient that funnels horde to the "weakest" block to concentrate attacks!
+                    if (cellDef.type === 'trench') cost += 500;
+                    if (cellDef.type === 'moat') cost += 300;
+                }
+                
+                cost += dangerMap[nx][ny]; // Avoid Maxim lines of sight
+                
+                if (currDist + cost < distances[nx][ny]) {
+                    distances[nx][ny] = currDist + cost;
+                    queue.push({x: nx, y: ny});
                 }
             }
         }
@@ -407,18 +415,16 @@ function update() {
         let b = bullets[i];
         b.x += b.vx; b.y += b.vy;
         
-        // Bullet Collision with Obstacles!
+        // Obstacle Collision for Bullets (Rocks, Trenches, Castle)
         let bx = Math.floor(b.x / CELL_SIZE);
         let by = Math.floor(b.y / CELL_SIZE);
         if (bx >= 0 && bx < COLS && by >= 0 && by < ROWS) {
             let t = terrain[bx][by];
             let d = grid[bx][by];
-            if (t === 2 || (d && d.type === 'trench')) {
-                // Stopped by Rock or Trench!
+            if (t === 2 || t === 3 || (d && d.type === 'trench')) {
                 b.pierceLeft = 0; 
-                createParticles(b.x, b.y, '#888', 5); // Obstacle impact dust
+                createParticles(b.x, b.y, '#888', 5); 
                 
-                // Damage trench slightly
                 if (d && d.type === 'trench') {
                     d.hp -= 2;
                     if (d.hp <= 0) grid[bx][by] = null;
@@ -470,21 +476,12 @@ function update() {
             gameOver = true; restartBtn.style.display = 'block'; return;
         }
         
-        if (cellTerrain === 1 && (!inCell || inCell.type !== 'bridge')) {
+        if (cellTerrain === 1 && (!inCell || inCell.type !== 'bridge' && inCell.type !== 'hordeLadder')) {
             createParticles(h.x, h.y, '#1e90ff', 20); horde.splice(i, 1);
             log("A horde member drowned in a pond!", 'error'); continue;
         }
         
-        if (inCell && inCell.type === 'moat') {
-            if (inCell.capacity > 0) {
-                inCell.capacity--;
-                createParticles(h.x, h.y, 'green', 15); createParticles(h.x, h.y, 'red', 5);
-                horde.splice(i, 1);
-                if (inCell.capacity <= 0) { grid[cx][cy] = null; log(`Croc Moat broken!`, 'error'); }
-                continue;
-            }
-        }
-        
+        // Oil Slick
         if (inCell && inCell.type === 'oil') {
             if (h.slipTime <= 0) {
                 h.slipTime = 40; 
@@ -494,7 +491,17 @@ function update() {
         }
         
         let currentSpeed = h.speed;
-        if (inCell && inCell.type === 'wire') currentSpeed *= DEFENSES.wire.slow;
+        if (inCell && inCell.type === 'wire') {
+            currentSpeed *= DEFENSES.wire.slow;
+            if (h.frame % 10 === 0) {
+                inCell.hp -= 2; // Demolishing wire over time
+                if (inCell.hp <= 0) {
+                    grid[cx][cy] = null;
+                    log("BANGALORE! Wire destroyed!", "build");
+                    createParticles(cx*CELL_SIZE+20, cy*CELL_SIZE+20, 'orange', 15);
+                }
+            }
+        }
         
         let wiggleX = Math.cos(h.frame * 0.1 + h.wigglePhase) * 0.5;
         let wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
@@ -509,7 +516,7 @@ function update() {
         
         if (flowField) {
             let bestX = cx; let bestY = cy;
-            let minD = flowField[cx][cy] !== undefined ? flowField[cx][cy] : 9999;
+            let minD = flowField[cx][cy] !== undefined ? flowField[cx][cy] : 999999;
             
             let dirs = [[-1,0], [0,-1], [0,1], [1,0], [-1,-1], [-1,1], [1,-1], [1,1]];
             for(let d of dirs) {
@@ -521,26 +528,34 @@ function update() {
                 }
             }
             
-            if (minD >= 9999 && h.frame > 30) {
-                let hitObstacle = false;
-                for(let d of [[-1,0],[1,0],[0,-1],[0,1]]) {
-                    let nx = cx+d[0]; let ny=cy+d[1];
-                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
-                         let block = grid[nx][ny];
-                         if (block && (block.type === 'trench' || block.type === 'oil' || block.type === 'maxim')) {
-                             if (ticks % 10 === 0) {
-                                 block.hp -= 2;
-                                 createParticles(nx*CELL_SIZE+20, ny*CELL_SIZE+20, 'brown', 2);
-                                 if (block.hp <= 0) grid[nx][ny] = null;
-                             }
-                             hitObstacle = true; break;
-                         }
+            // Check if the target cell is a solid blocking defense (Trench or Moat)
+            let targetDef = grid[bestX][bestY];
+            if (targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat')) {
+                // Cannot move into it, must demolish!
+                if (targetDef.type === 'trench') {
+                    targetDef.hp -= 0.5; // Many horde attacking = fast demolition
+                    createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, 'brown', 1);
+                    if (targetDef.hp <= 0) {
+                        grid[bestX][bestY] = null;
+                        log("Trench breached by the horde!", 'error');
+                        createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, '#888', 20);
+                    }
+                } else if (targetDef.type === 'moat') {
+                    if (h.frame % 30 === 0) {
+                        targetDef.capacity--;
+                        createParticles(h.x, h.y, 'red', 10);
+                        horde.splice(i, 1); // Sacrifice to the moat!
+                        if (targetDef.capacity <= 0) {
+                            // Turn into a walkable ladder!
+                            grid[bestX][bestY] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
+                            log(`Moat filled! The horde created a makeshift bridge!`, 'error');
+                        }
                     }
                 }
-                if (!hitObstacle) {
-                    h.x += (Math.random()-0.5)*2; h.y += (Math.random()-0.5)*2;
-                }
+                // Horde stays in place to keep attacking/sacrificing, maybe wiggles slightly
+                h.x += wiggleX * 0.2; h.y += wiggleY * 0.2;
             } else {
+                // Normal Movement into clear space or wire/oil
                 let tx = bestX * CELL_SIZE + 20; let ty = bestY * CELL_SIZE + 20;
                 let dx = tx - (h.x + 10); let dy = ty - (h.y + 10);
                 let len = Math.sqrt(dx*dx + dy*dy);
@@ -639,6 +654,8 @@ function draw() {
                 } else if (cell.type === 'trench' || cell.type === 'oil' || cell.type === 'maxim') {
                     ctx.fillStyle = 'rgba(0,255,0,0.5)';
                     ctx.fillRect(px, py + CELL_SIZE - 5, (cell.hp / DEFENSES[cell.type].hp) * CELL_SIZE, 5);
+                } else if (cell.type === 'hordeLadder') {
+                    // It's a ladder bridging the moat!
                 }
             }
         }
