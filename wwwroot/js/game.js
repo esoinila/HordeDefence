@@ -679,7 +679,7 @@ function update() {
         if (currentDangerMap && currentDangerMap[cx][cy] > 0 && smokeMap[cx][cy] <= 0) {
             // Very high chance per second (0.02/frame = 120%/sec) to pop smoke and sacrifice
             if (Math.random() < 0.02) {
-                smokeMap[cx][cy] = 200; // About 3.3 seconds of thick cover!
+                smokeMap[cx][cy] = 100; // About 1.6 seconds of thick cover!
                 createParticles(h.x + 10, h.y + 10, 'gray', 40);
                 log("A frontline horde member sacrificed themselves to throw a Smoke Screen!", "wave");
                 horde.splice(i, 1);
