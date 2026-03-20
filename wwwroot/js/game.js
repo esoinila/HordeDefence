@@ -605,6 +605,22 @@ function update() {
         let inCell = grid[cx][cy];
         let cellTerrain = terrain[cx][cy];
         
+        let wiggleX = Math.cos(h.frame * 0.1 + h.wigglePhase) * 0.5;
+        let wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
+        
+        // Physical Melee Trap for Maxims (if they touch the cell, they tear it down!)
+        if (inCell && inCell.type === 'maxim') {
+            inCell.hp -= 1.0; 
+            createParticles(h.x + 10, h.y + 10, 'brown', 1);
+            if (inCell.hp <= 0) {
+                grid[cx][cy] = null;
+                log("A Maxim gun was overrun in melee!", 'error');
+                createParticles(cx*CELL_SIZE+20, cy*CELL_SIZE+20, 'orange', 20);
+            }
+            h.x += wiggleX * 0.2; h.y += wiggleY * 0.2;
+            continue; // Trapped in melee combat for this frame
+        }
+        
         if (cellTerrain === 3) {
             explodeCastle();
             gameOver = true; 
@@ -650,8 +666,8 @@ function update() {
             }
         }
         
-        let wiggleX = Math.cos(h.frame * 0.1 + h.wigglePhase) * 0.5;
-        let wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
+        wiggleX = Math.cos(h.frame * 0.1 + h.wigglePhase) * 0.5;
+        wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
         
         if (h.slipTime > 0) {
             h.slipTime--; h.spin += 0.3; 
