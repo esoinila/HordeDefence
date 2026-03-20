@@ -501,11 +501,36 @@ function update() {
         for (let y = 0; y < ROWS; y++) {
             let cell = grid[x][y];
             if (cell && cell.type === 'maxim') {
+                let mx = x * CELL_SIZE + 20;
+                let my = y * CELL_SIZE + 20;
+                
+                // 1. Melee Collision with Horde (True bounding-box collision)
+                let dead = false;
+                for (let h of horde) {
+                    let dx = Math.abs((h.x + 10) - mx);
+                    let dy = Math.abs((h.y + 10) - my);
+                    // Maxim half-width is 20, Horde half-width is 10. Sum = 30.
+                    if (dx < 28 && dy < 28) {  
+                        cell.hp -= 0.5;
+                        createParticles(mx + (Math.random()-0.5)*20, my + (Math.random()-0.5)*20, 'brown', 1);
+                        h.x += (Math.random() - 0.5) * 1.5; // Slight physical pushback
+                        h.y += (Math.random() - 0.5) * 1.5;
+                        if (cell.hp <= 0) {
+                            grid[x][y] = null;
+                            log("A Maxim gun was overrun and destroyed by the swarm!", 'error');
+                            createParticles(mx, my, 'orange', 30);
+                            dead = true;
+                            break; 
+                        }
+                    }
+                }
+                
+                if (dead) continue;
+                
+                // 2. Shooting Logic
                 if (cell.cooldown > 0) cell.cooldown--;
                 
                 if (cell.cooldown <= 0) {
-                    let mx = x * CELL_SIZE + 20;
-                    let my = y * CELL_SIZE + 20;
                     
                     let bestDest = 999999;
                     let target = null;
@@ -607,19 +632,6 @@ function update() {
         
         let wiggleX = Math.cos(h.frame * 0.1 + h.wigglePhase) * 0.5;
         let wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
-        
-        // Physical Melee Trap for Maxims (if they touch the cell, they tear it down!)
-        if (inCell && inCell.type === 'maxim') {
-            inCell.hp -= 1.0; 
-            createParticles(h.x + 10, h.y + 10, 'brown', 1);
-            if (inCell.hp <= 0) {
-                grid[cx][cy] = null;
-                log("A Maxim gun was overrun in melee!", 'error');
-                createParticles(cx*CELL_SIZE+20, cy*CELL_SIZE+20, 'orange', 20);
-            }
-            h.x += wiggleX * 0.2; h.y += wiggleY * 0.2;
-            continue; // Trapped in melee combat for this frame
-        }
         
         if (cellTerrain === 3) {
             explodeCastle();
