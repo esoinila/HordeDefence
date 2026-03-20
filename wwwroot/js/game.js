@@ -203,6 +203,7 @@ canvas.addEventListener('mousedown', (e) => {
                 hp: def.hp,
                 capacity: def.capacity,
                 cooldown: 0,
+                facingAngle: Math.PI / 2, // point down by default
                 x: gx,
                 y: gy
             };
@@ -507,66 +508,94 @@ function update() {
                 let mx = x * CELL_SIZE + 20;
                 let my = y * CELL_SIZE + 20;
                 
-                // 1. Melee Collision with Horde (True bounding-box collision)
+                // 1. Horde Aggro and Melee Collision
                 let dead = false;
                 for (let h of horde) {
-                    let dx = Math.abs((h.x + 10) - mx);
-                    let dy = Math.abs((h.y + 10) - my);
-                    // Maxim half-width is 20, Horde half-width is 10. Sum = 30.
-                    if (dx < 28 && dy < 28) {  
-                        cell.hp -= 0.5;
-                        createParticles(mx + (Math.random()-0.5)*20, my + (Math.random()-0.5)*20, 'brown', 1);
-                        h.x += (Math.random() - 0.5) * 1.5; // Slight physical pushback
-                        h.y += (Math.random() - 0.5) * 1.5;
-                        if (cell.hp <= 0) {
-                            grid[x][y] = null;
-                            log("A Maxim gun was overrun and destroyed by the swarm!", 'error');
-                            createParticles(mx, my, 'orange', 30);
-                            dead = true;
-                            break; 
+                    let dx = (h.x + 10) - mx;
+                    let dy = (h.y + 10) - my;
+                    let adx = Math.abs(dx);
+                    let ady = Math.abs(dy);
+                    
+                    // If moving within 1 cell visually (Aggro Radius)
+                    if (adx < 50 && ady < 50) {  
+                        if (adx < 28 && ady < 28) {
+                            // Touch! Deal damage
+                            cell.hp -= 0.5;
+                            createParticles(mx + (Math.random()-0.5)*20, my + (Math.random()-0.5)*20, 'brown', 1);
+                            h.x += (Math.random() - 0.5) * 1.5; // pushback
+                            h.y += (Math.random() - 0.5) * 1.5;
+                            if (cell.hp <= 0) {
+                                grid[x][y] = null;
+                                log("A Maxim gun was overrun and destroyed by the swarm!", 'error');
+                                createParticles(mx, my, 'orange', 30);
+                                dead = true;
+                                break; 
+                            }
+                        } else {
+                            // Aggro! Sucked into melee!
+                            h.aggroX = mx;
+                            h.aggroY = my;
                         }
                     }
                 }
                 
                 if (dead) continue;
                 
-                // 2. Shooting Logic
-                if (cell.cooldown > 0) cell.cooldown--;
-                
-                if (cell.cooldown <= 0) {
+                // 2. Turret Targeting and Rotation Logic
+                let bestDest = 999999;
+                let target = null;
+                for (let h of horde) {
+                    let hx = Math.floor((h.x+10)/CELL_SIZE);
+                    let hy = Math.floor((h.y+10)/CELL_SIZE);
                     
-                    let bestDest = 999999;
-                    let target = null;
-                    for (let h of horde) {
-                        let hx = Math.floor((h.x+10)/CELL_SIZE);
-                        let hy = Math.floor((h.y+10)/CELL_SIZE);
-                        
-                        // Check if Target is in Line of Sight! Otherwise ignore.
-                        if (hasLOS(x, y, hx, hy)) {
-                            let dx = h.x + 10 - mx;
-                            let dy = h.y + 10 - my;
-                            let distSq = dx*dx + dy*dy;
-                            if (distSq < DEFENSES.maxim.range*DEFENSES.maxim.range && distSq < bestDest) {
-                                bestDest = distSq; target = h;
-                            }
+                    // Check if Target is in Line of Sight! Otherwise ignore.
+                    if (hasLOS(x, y, hx, hy)) {
+                        let hdx = h.x + 10 - mx;
+                        let hdy = h.y + 10 - my;
+                        let distSq = hdx*hdx + hdy*hdy;
+                        if (distSq < DEFENSES.maxim.range*DEFENSES.maxim.range && distSq < bestDest) {
+                            bestDest = distSq; target = h;
                         }
                     }
-                    if (target) {
-                        let dx = target.x + 10 - mx;
-                        let dy = target.y + 10 - my;
-                        let angle = Math.atan2(dy, dx);
-                        
-                        angle += (Math.random() - 0.5) * 0.4; // Recoil spray
-                        
+                }
+                
+                if (target) {
+                    let targetDX = target.x + 10 - mx;
+                    let targetDY = target.y + 10 - my;
+                    let desiredAngle = Math.atan2(targetDY, targetDX);
+                    
+                    // Smoothly rotate facingAngle towards desiredAngle!
+                    let diff = desiredAngle - cell.facingAngle;
+                    
+                    // Normalize diff to -PI to PI
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    
+                    // Turn speed 0.1 radians per frame (~6 degrees per frame)
+                    let turnSpeed = 0.08; 
+                    if (Math.abs(diff) <= turnSpeed) {
+                        cell.facingAngle = desiredAngle; // Snapped!
+                    } else {
+                        cell.facingAngle += Math.sign(diff) * turnSpeed; // Turning mechanics!
+                    }
+                    
+                    if (cell.cooldown > 0) cell.cooldown--;
+                    
+                    // Only fire if we are roughly aiming at the target (+- 10 degrees)
+                    if (cell.cooldown <= 0 && Math.abs(diff) < 0.2) {
+                        let spray = (Math.random() - 0.5) * 0.4; // Recoil spray
+                        let fireAngle = cell.facingAngle + spray;
                         bullets.push({
                             x: mx, y: my,
-                            vx: Math.cos(angle) * 18, vy: Math.sin(angle) * 18,
+                            vx: Math.cos(fireAngle) * 18, vy: Math.sin(fireAngle) * 18,
                             pierceLeft: DEFENSES.maxim.pierce, dmg: DEFENSES.maxim.dmg,
                             hitList: new Set()
                         });
                         cell.cooldown = DEFENSES.maxim.fireRate + Math.floor(Math.random() * 5);
-                        createParticles(mx, my, '#ffcc00', 3);
+                        createParticles(mx + Math.cos(cell.facingAngle)*15, my + Math.sin(cell.facingAngle)*15, '#ffcc00', 3);
                     }
+                } else {
+                    if (cell.cooldown > 0) cell.cooldown--;
                 }
             }
         }
@@ -688,7 +717,15 @@ function update() {
             h.spin = 0; 
         }
         
-        if (flowField) {
+        let tx = 0, ty = 0, usingAggro = false;
+        if (h.aggroX !== undefined) {
+            // Horde member has been aggro'd by a nearby Maxim!
+            tx = h.aggroX; ty = h.aggroY;
+            usingAggro = true;
+            // Clear aggro so it must be refreshed next frame by the Maxim scanning it
+            h.aggroX = undefined;
+            h.aggroY = undefined;
+        } else if (flowField) {
             let bestX = cx; let bestY = cy;
             let minD = flowField[cx][cy] !== undefined ? flowField[cx][cy] : 999999;
             
@@ -770,6 +807,14 @@ function update() {
                 if (len > 1) {
                     h.x += (dx/len) * currentSpeed + wiggleX; h.y += (dy/len) * currentSpeed + wiggleY;
                 }
+            }
+        }
+        
+        if (usingAggro) {
+            let dx = tx - (h.x + 10); let dy = ty - (h.y + 10);
+            let len = Math.sqrt(dx*dx + dy*dy);
+            if (len > 1) {
+                h.x += (dx/len) * currentSpeed + wiggleX; h.y += (dy/len) * currentSpeed + wiggleY;
             }
         }
     }
@@ -915,8 +960,30 @@ function draw() {
                 
                 ctx.fillStyle = bColor;
                 ctx.fillRect(px+2, py+2, CELL_SIZE-4, CELL_SIZE-4);
-                ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                ctx.fillText(bSym, px + CELL_SIZE/2, py + CELL_SIZE/2);
+                
+                if (cell.type === 'maxim') {
+                    ctx.save();
+                    ctx.translate(px + CELL_SIZE/2, py + CELL_SIZE/2);
+                    // The gun natively looks like it points left, so we add Math.PI so it points Right (0 rads)
+                    ctx.rotate(cell.facingAngle + Math.PI); 
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.fillText(bSym, 0, 0);
+                    // Draw a distinct dark barrel so the facing angle is extremely obvious visually
+                    ctx.fillStyle = '#222';
+                    // We rotated by PI, so positive X is actually backwards for the gun emoji. 
+                    // Let's just draw the barrel pointing to the true facingAngle instead.
+                    ctx.restore();
+                    
+                    ctx.save();
+                    ctx.translate(px + CELL_SIZE/2, py + CELL_SIZE/2);
+                    ctx.rotate(cell.facingAngle);
+                    ctx.fillStyle = 'yellow';
+                    ctx.fillRect(10, -2, 10, 4); // Barrel
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.fillText(bSym, px + CELL_SIZE/2, py + CELL_SIZE/2);
+                }
                 
                 if (cell.type === 'moat') {
                     ctx.fillStyle = 'rgba(255,0,0,0.5)';
