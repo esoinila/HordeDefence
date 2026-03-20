@@ -24,12 +24,13 @@ let terrain = []; // 0=grass, 1=water (pond), 2=rock (obstacle), 3=castle
 let horde = [];
 let bullets = [];
 let particles = [];
-let ticks = 0;
+let spawnTicks = 0;
 let totalKills = 0;
 let maxHorde = 40; 
 let spawnedHorde = 0;
 let gameOver = false;
 let victory = false;
+let savedGrid = null; // Stores defense layout exactly as it was when the wave started
 
 // DOM Elements
 const canvas = document.getElementById('gameCanvas');
@@ -40,6 +41,8 @@ const logDiv = document.getElementById('battleLog');
 const buildBtns = document.querySelectorAll('.build-btn');
 const startBtn = document.getElementById('startWaveBtn');
 const restartBtn = document.getElementById('restartBtn');
+const replayBtn = document.getElementById('replayBtn');
+const nextWaveBtn = document.getElementById('nextWaveBtn');
 const rerollBtn = document.getElementById('rerollBtn');
 
 // Map Generation
@@ -189,17 +192,72 @@ function updateSupplies() {
     suppliesDisplay.innerText = supplies;
 }
 
+function saveGridState() {
+    savedGrid = [];
+    for (let x = 0; x < COLS; x++) {
+        savedGrid[x] = [];
+        for (let y = 0; y < ROWS; y++) {
+            if (grid[x][y]) {
+                savedGrid[x][y] = Object.assign({}, grid[x][y]);
+            } else {
+                savedGrid[x][y] = null;
+            }
+        }
+    }
+}
+
+function restoreGridState() {
+    grid = [];
+    for (let x = 0; x < COLS; x++) {
+        grid[x] = [];
+        for (let y = 0; y < ROWS; y++) {
+            if (savedGrid && savedGrid[x][y]) {
+                grid[x][y] = Object.assign({}, savedGrid[x][y]);
+            } else {
+                grid[x][y] = null;
+            }
+        }
+    }
+    replayBtn.style.display = 'none';
+    nextWaveBtn.style.display = 'none';
+    restartBtn.style.display = 'none';
+    log("Defenses restored!", "build");
+    draw();
+}
+
+function startWave() {
+    phase = 'battle';
+    phaseDisplay.innerText = "DEFEND THE CASTLE!";
+    phaseDisplay.className = "text-danger font-weight-bold";
+    startBtn.style.display = 'none';
+    rerollBtn.style.display = 'none';
+    buildBtns.forEach(b => b.disabled = true);
+    
+    // Reset battle values
+    horde = []; bullets = []; particles = [];
+    spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0;
+    spawnTicks = 0;
+    
+    log(`THE HORDE IS APPROACHING! (Wave Size: ${maxHorde})`, "wave");
+    requestAnimationFrame(gameLoop);
+}
+
 startBtn.addEventListener('click', () => {
     if (phase === 'entrench') {
-        phase = 'battle';
-        phaseDisplay.innerText = "DEFEND THE CASTLE!";
-        phaseDisplay.className = "text-danger font-weight-bold";
-        startBtn.style.display = 'none';
-        rerollBtn.style.display = 'none';
-        log("THE HORDE IS APPROACHING FROM ALL SIDES!", "wave");
-        buildBtns.forEach(b => b.disabled = true);
-        requestAnimationFrame(gameLoop);
+        saveGridState();
+        startWave();
     }
+});
+
+replayBtn.addEventListener('click', () => {
+    restoreGridState();
+    startWave();
+});
+
+nextWaveBtn.addEventListener('click', () => {
+    restoreGridState();
+    maxHorde = Math.floor(maxHorde * 1.5);
+    startWave();
 });
 
 restartBtn.addEventListener('click', () => location.reload());
@@ -356,11 +414,11 @@ function update() {
         return;
     }
     
-    ticks++;
+    spawnTicks++;
     // Recalculate Flow Field occasionally so they react to broken trenches
-    if (ticks % 30 === 0) flowField = getFlowField();
+    if (spawnTicks % 30 === 0) flowField = getFlowField();
     
-    if (spawnedHorde < maxHorde && ticks % 20 === 0) spawnHorde();
+    if (spawnedHorde < maxHorde && spawnTicks % 20 === 0) spawnHorde();
     
     // --- TOWERS (Maxims) ---
     for (let x = 0; x < COLS; x++) {
@@ -473,7 +531,10 @@ function update() {
         
         if (cellTerrain === 3) {
             explodeCastle();
-            gameOver = true; restartBtn.style.display = 'block'; return;
+            gameOver = true; 
+            replayBtn.style.display = 'block';
+            restartBtn.style.display = 'block';
+            return;
         }
         
         if (cellTerrain === 1 && (!inCell || inCell.type !== 'bridge' && inCell.type !== 'hordeLadder')) {
@@ -568,7 +629,10 @@ function update() {
     
     if (spawnedHorde >= maxHorde && horde.length === 0) {
         gameOver = true; victory = true;
-        log("WAVE DEFEATED! THE CASTLE STANDS!", "wave"); restartBtn.style.display = 'block';
+        log("WAVE DEFEATED! THE CASTLE STANDS!", "wave"); 
+        replayBtn.style.display = 'block';
+        nextWaveBtn.style.display = 'block';
+        restartBtn.style.display = 'block';
     }
     updateParticles();
 }
