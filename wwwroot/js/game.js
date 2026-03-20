@@ -810,10 +810,21 @@ function draw() {
             let cell = grid[x][y];
             if (cell) {
                 let px = x * CELL_SIZE; let py = y * CELL_SIZE;
-                ctx.fillStyle = DEFENSES[cell.type].color;
+                
+                let bColor = 'gray';
+                let bSym = '';
+                if (cell.type === 'hordeLadder') {
+                    bColor = cell.color || '#8B4513';
+                    bSym = cell.symbol || '🪜';
+                } else if (DEFENSES[cell.type]) {
+                    bColor = DEFENSES[cell.type].color;
+                    bSym = DEFENSES[cell.type].symbol;
+                }
+                
+                ctx.fillStyle = bColor;
                 ctx.fillRect(px+2, py+2, CELL_SIZE-4, CELL_SIZE-4);
                 ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                ctx.fillText(DEFENSES[cell.type].symbol, px + CELL_SIZE/2, py + CELL_SIZE/2);
+                ctx.fillText(bSym, px + CELL_SIZE/2, py + CELL_SIZE/2);
                 
                 if (cell.type === 'moat') {
                     ctx.fillStyle = 'rgba(255,0,0,0.5)';
