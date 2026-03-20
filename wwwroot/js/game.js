@@ -33,6 +33,7 @@ let victory = false;
 let savedGrid = null; // Stores defense layout exactly as it was when the wave started
 let hoverX = -1;
 let hoverY = -1;
+let waterEaten = {};
 
 // DOM Elements
 const canvas = document.getElementById('gameCanvas');
@@ -264,6 +265,7 @@ function startWave() {
     horde = []; bullets = []; particles = [];
     spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0;
     spawnTicks = 0;
+    waterEaten = {};
     
     log(`THE HORDE IS APPROACHING! (Wave Size: ${maxHorde})`, "wave");
     requestAnimationFrame(gameLoop);
@@ -391,13 +393,33 @@ function getFlowField() {
                 let cellTerrain = terrain[nx][ny];
                 let cellDef = grid[nx][ny];
                 
-                // Purely blocked terrain: Solid rock, water with no bridge
+                // Purely blocked terrain: Solid rock
                 if (cellTerrain === 2) continue; 
-                if (cellTerrain === 1 && (!cellDef || cellDef.type !== 'bridge')) continue; 
                 
-                // Calculate movement cost
+                // Cost calculations
                 let cost = 1; 
                 if (d[0] !== 0 && d[1] !== 0) cost = 1.4; // diagonal penalty
+                
+                // If it's natural water with NO bridge/ladder, it's basically a moat. Huge cost!
+                if (cellTerrain === 1 && (!cellDef || (cellDef.type !== 'bridge' && cellDef.type !== 'hordeLadder'))) {
+                    cost += 300;
+                }
+                
+                // Block Diagonal Corner Cuts
+                if (d[0] !== 0 && d[1] !== 0) {
+                    let b1 = false, b2 = false;
+                    let nx1 = curr.x + d[0], ny1 = curr.y;
+                    if (nx1>=0 && nx1<COLS && ny1>=0 && ny1<ROWS) {
+                        let ct = terrain[nx1][ny1], cd = grid[nx1][ny1];
+                        b1 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'));
+                    }
+                    let nx2 = curr.x, ny2 = curr.y + d[1];
+                    if (nx2>=0 && nx2<COLS && ny2>=0 && ny2<ROWS) {
+                        let ct = terrain[nx2][ny2], cd = grid[nx2][ny2];
+                        b2 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'));
+                    }
+                    if (b1 || b2) continue;
+                }
                 
                 if (cellDef) {
                     if (cellDef.type === 'wire') cost += 10;
@@ -592,9 +614,18 @@ function update() {
             return;
         }
         
-        if (cellTerrain === 1 && (!inCell || inCell.type !== 'bridge' && inCell.type !== 'hordeLadder')) {
-            createParticles(h.x, h.y, '#1e90ff', 20); horde.splice(i, 1);
-            log("A horde member drowned in a pond!", 'error'); continue;
+        if (cellTerrain === 1 && (!inCell || (inCell.type !== 'bridge' && inCell.type !== 'hordeLadder'))) {
+             let k = cx + ',' + cy;
+             waterEaten[k] = (waterEaten[k] || 0) + 1;
+             if (waterEaten[k] >= 5) {
+                  grid[cx][cy] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
+                  log("The crocodiles are full! The pond became a gruesome bridge!", "error");
+             } else {
+                  createParticles(h.x, h.y, '#1e90ff', 20);
+                  if (Math.random() < 0.2) log("A horde member slipped and fell to the crocs!", 'error'); 
+             }
+             horde.splice(i, 1);
+             continue;
         }
         
         // Oil Slick
@@ -637,6 +668,22 @@ function update() {
             let dirs = [[-1,0], [0,-1], [0,1], [1,0], [-1,-1], [-1,1], [1,-1], [1,1]];
             for(let d of dirs) {
                 let nx = cx + d[0]; let ny = cy + d[1];
+                
+                if (d[0] !== 0 && d[1] !== 0) {
+                    let b1 = false, b2 = false;
+                    let nx1 = cx + d[0], ny1 = cy;
+                    if (nx1>=0 && nx1<COLS && ny1>=0 && ny1<ROWS) {
+                        let ct = terrain[nx1][ny1], cd = grid[nx1][ny1];
+                        b1 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'));
+                    }
+                    let nx2 = cx, ny2 = cy + d[1];
+                    if (nx2>=0 && nx2<COLS && ny2>=0 && ny2<ROWS) {
+                        let ct = terrain[nx2][ny2], cd = grid[nx2][ny2];
+                        b2 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'));
+                    }
+                    if (b1 || b2) continue;
+                }
+                
                 if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
                     if (flowField[nx][ny] < minD) {
                         minD = flowField[nx][ny]; bestX = nx; bestY = ny;
@@ -644,11 +691,16 @@ function update() {
                 }
             }
             
-            // Check if the target cell is a solid blocking defense (Trench or Moat or Maxim)
+            // Check if the target cell is a solid blocking defense or natural water
             let targetDef = grid[bestX][bestY];
-            if (targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat' || targetDef.type === 'maxim')) {
-                // Cannot move into it, must demolish!
-                if (targetDef.type === 'trench' || targetDef.type === 'maxim') {
+            let targetTerrain = terrain[bestX][bestY];
+            
+            let isWaterTarget = targetTerrain === 1 && (!targetDef || (targetDef.type !== 'bridge' && targetDef.type !== 'hordeLadder'));
+            let isSolidDef = targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat' || targetDef.type === 'maxim');
+            
+            if (isSolidDef || isWaterTarget) {
+                // Cannot move into it, must demolish or sacrifice!
+                if (isSolidDef && (targetDef.type === 'trench' || targetDef.type === 'maxim')) {
                     targetDef.hp -= 0.5; // Many horde attacking = fast demolition
                     createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, 'brown', 1);
                     if (targetDef.hp <= 0) {
@@ -657,15 +709,25 @@ function update() {
                         log(msg, 'error');
                         createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, '#888', 20);
                     }
-                } else if (targetDef.type === 'moat') {
+                } else if ((isSolidDef && targetDef.type === 'moat') || isWaterTarget) {
                     if (h.frame % 30 === 0) {
-                        targetDef.capacity--;
-                        createParticles(h.x, h.y, 'red', 10);
-                        horde.splice(i, 1); // Sacrifice to the moat!
-                        if (targetDef.capacity <= 0) {
-                            // Turn into a walkable ladder!
-                            grid[bestX][bestY] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
-                            log(`Moat filled! The horde created a makeshift bridge!`, 'error');
+                        if (isWaterTarget) {
+                            let k = bestX + ',' + bestY;
+                            waterEaten[k] = (waterEaten[k] || 0) + 1;
+                            createParticles(h.x, h.y, '#1e90ff', 10);
+                            horde.splice(i, 1);
+                            if (waterEaten[k] >= 5) {
+                                grid[bestX][bestY] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
+                                log("The crocodiles are full! The pond became a gruesome bridge!", "error");
+                            }
+                        } else {
+                            targetDef.capacity--;
+                            createParticles(h.x, h.y, 'red', 10);
+                            horde.splice(i, 1);
+                            if (targetDef.capacity <= 0) {
+                                grid[bestX][bestY] = { type: 'hordeLadder', color: '#ffcc99', symbol: '🪜' };
+                                log(`Moat filled! The horde created a makeshift bridge!`, 'error');
+                            }
                         }
                     }
                 }
