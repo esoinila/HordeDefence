@@ -42,6 +42,7 @@ const buildBtns = document.querySelectorAll('.build-btn');
 const startBtn = document.getElementById('startWaveBtn');
 const restartBtn = document.getElementById('restartBtn');
 const replayBtn = document.getElementById('replayBtn');
+const tryAgainBtn = document.getElementById('tryAgainBtn');
 const nextWaveBtn = document.getElementById('nextWaveBtn');
 const rerollBtn = document.getElementById('rerollBtn');
 
@@ -221,6 +222,7 @@ function restoreGridState() {
     replayBtn.style.display = 'none';
     nextWaveBtn.style.display = 'none';
     restartBtn.style.display = 'none';
+    tryAgainBtn.style.display = 'none';
     log("Defenses restored!", "build");
     draw();
 }
@@ -252,6 +254,26 @@ startBtn.addEventListener('click', () => {
 replayBtn.addEventListener('click', () => {
     restoreGridState();
     startWave();
+});
+
+tryAgainBtn.addEventListener('click', () => {
+    restoreGridState();
+    supplies += 200;
+    updateSupplies();
+    
+    phase = 'entrench';
+    phaseDisplay.innerText = "ENTRENCHMENT PHASE";
+    phaseDisplay.className = "text-primary font-weight-bold";
+    
+    startBtn.style.display = 'block';
+    rerollBtn.style.display = 'block';
+    buildBtns.forEach(b => b.disabled = false);
+    
+    horde = []; bullets = []; particles = [];
+    spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0; spawnTicks = 0;
+    
+    log("Defenses restored! +200 Supplies granted. Fortify your position!", "build");
+    draw();
 });
 
 nextWaveBtn.addEventListener('click', () => {
@@ -408,6 +430,8 @@ function explodeCastle() {
 }
 
 function update() {
+    if (phase === 'entrench') return;
+    
     if (gameOver) {
         if (castleExplosion > 0) castleExplosion++;
         updateParticles();
@@ -533,6 +557,7 @@ function update() {
             explodeCastle();
             gameOver = true; 
             replayBtn.style.display = 'block';
+            tryAgainBtn.style.display = 'block';
             restartBtn.style.display = 'block';
             return;
         }
