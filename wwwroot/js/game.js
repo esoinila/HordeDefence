@@ -1007,35 +1007,42 @@ function update() {
         let h = horde[i];
         h.frame++;
         
-        if (h.type === 'brain' && h.frame - (h.lastCommandTick || 0) > 60) {
-            h.lastCommandTick = h.frame;
-            let brainRadius = 250;
-            let nearestDef = null;
-            let minDist = brainRadius * brainRadius;
-            for (let xx=0; xx<COLS; xx++) {
-                for (let yy=0; yy<ROWS; yy++) {
-                    let cellObj = grid[xx][yy];
-                    if (cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'maxim' || cellObj.type === 'generator' || cellObj.type === 'decoy')) {
-                        let dcx = xx * CELL_SIZE + CELL_SIZE/2;
-                        let dcy = yy * CELL_SIZE + CELL_SIZE/2;
-                        let distSq = Math.pow((h.x+10)-dcx, 2) + Math.pow((h.y+10)-dcy, 2);
-                        if (distSq < minDist) {
-                            minDist = distSq;
-                            nearestDef = {x: dcx, y: dcy};
+        if (h.type === 'brain') {
+            if (h.lightbulbTicks > 0) h.lightbulbTicks--;
+            
+            if (h.frame - (h.lastCommandTick || 0) > 120) {
+                h.lastCommandTick = h.frame;
+                let minDanger = 999999;
+                let weakPoints = [];
+                for (let xx=0; xx<COLS; xx++) {
+                    for (let yy=0; yy<ROWS; yy++) {
+                        let cellObj = grid[xx][yy];
+                        if (cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'generator' || cellObj.type === 'decoy')) {
+                            let danger = currentDangerMap ? currentDangerMap[xx][yy] : 0;
+                            if (danger < minDanger) {
+                                minDanger = danger;
+                                weakPoints = [{x: xx, y: yy}];
+                            } else if (danger === minDanger) {
+                                weakPoints.push({x: xx, y: yy});
+                            }
                         }
                     }
                 }
-            }
-            if (nearestDef) {
-                createParticles(h.x+10, h.y+10, 'magenta', 15);
-                for (let oh of horde) {
-                    if (oh.type !== 'brain') {
-                        let ddx = (oh.x+10) - (h.x+10);
-                        let ddy = (oh.y+10) - (h.y+10);
-                        if (ddx*ddx + ddy*ddy <= brainRadius * brainRadius) {
-                            oh.aggroX = nearestDef.x;
-                            oh.aggroY = nearestDef.y;
-                            oh.aggroTicks = 60; // Persist until next command!
+                if (weakPoints.length > 0) {
+                    let wp = weakPoints[Math.floor(Math.random() * weakPoints.length)];
+                    let dcx = wp.x * CELL_SIZE + CELL_SIZE/2;
+                    let dcy = wp.y * CELL_SIZE + CELL_SIZE/2;
+                    
+                    h.breachTarget = {x: dcx, y: dcy};
+                    h.lightbulbTicks = 60;
+                    createParticles(h.x+10, h.y+10, 'yellow', 15);
+                    log("The BRAIN identified a blind spot! The horde is changing direction!", "error");
+                    
+                    for (let oh of horde) {
+                        if (oh.type !== 'brain') {
+                            oh.aggroX = dcx;
+                            oh.aggroY = dcy;
+                            oh.aggroTicks = 120; // Surge towards weak point
                         }
                     }
                 }
@@ -1111,6 +1118,14 @@ function update() {
         }
         
         let currentSpeed = h.speed;
+        if (h.type === 'brain') {
+            if (horde.length > 1) {
+                currentSpeed = 0.15; // Linger in the back unless alone
+            } else {
+                currentSpeed = 1.0; // Charge if alone!
+            }
+        }
+        
         if (inCell && inCell.type === 'wire') {
             currentSpeed *= DEFENSES.wire.slow;
             
@@ -1571,6 +1586,11 @@ function draw() {
                 // Eyes
                 ctx.fillStyle = 'black';
                 ctx.fillRect(-5, -5, 2, 2); ctx.fillRect(3, -5, 2, 2);
+                
+                if (h.lightbulbTicks > 0) {
+                    ctx.font = '20px Arial';
+                    ctx.fillText('💡', 0, -20);
+                }
             } else {
                 ctx.fillStyle = '#ffcc99'; 
                 ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
@@ -1613,6 +1633,26 @@ function draw() {
                     ctx.arc(px + 10, py + 10, CELL_SIZE * 0.5, 0, Math.PI*2);
                     ctx.fill();
                 }
+            }
+        }
+    }
+    
+    if (phase === 'battle') {
+        for (let h of horde) {
+            if (h.type === 'brain' && h.breachTarget) {
+                ctx.save();
+                ctx.translate(h.breachTarget.x, h.breachTarget.y);
+                let pulse = Math.abs(Math.sin(Date.now() / 200)) * 5;
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, 15 + pulse, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-20 - pulse, 0); ctx.lineTo(20 + pulse, 0);
+                ctx.moveTo(0, -20 - pulse); ctx.lineTo(0, 20 + pulse);
+                ctx.stroke();
+                ctx.restore();
             }
         }
     }
