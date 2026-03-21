@@ -1013,8 +1013,21 @@ function update() {
         let h = horde[i];
         h.frame++;
         
+        let cx = Math.floor((h.x + 10) / CELL_SIZE);
+        let cy = Math.floor((h.y + 10) / CELL_SIZE);
+        if (cx < 0) cx = 0; if (cx >= COLS) cx = COLS - 1;
+        if (cy < 0) cy = 0; if (cy >= ROWS) cy = ROWS - 1;
+        
         if (h.type === 'brain') {
             if (h.lightbulbTicks > 0) h.lightbulbTicks--;
+            
+            let brainDist = (flowField && flowField[cx] && flowField[cx][cy] !== undefined) ? flowField[cx][cy] : 999999;
+            let isOnBoard = (cx > 0 && cx < COLS-1 && cy > 0 && cy < ROWS-1);
+            
+            if (brainDist < 500 && h.breachTarget) {
+                h.breachTarget = null;
+                log("The way is open! The BRAIN commands a full charge!", "error");
+            }
             
             if (h.frame - (h.lastCommandTick || 0) > 120) {
                 h.lastCommandTick = h.frame;
@@ -1032,7 +1045,7 @@ function update() {
                     }
                 }
                 
-                if (!targetStillExists) {
+                if (!targetStillExists && brainDist >= 500 && isOnBoard) {
                     let minDanger = 999999;
                     let weakPoints = [];
                     for (let xx=0; xx<COLS; xx++) {
@@ -1062,7 +1075,7 @@ function update() {
                 }
                 
                 // If a target is active, command the horde to breach it
-                if (h.breachTarget) {
+                if (h.breachTarget && isOnBoard) {
                     let bx = Math.floor(h.breachTarget.x / CELL_SIZE);
                     let by = Math.floor(h.breachTarget.y / CELL_SIZE);
                     currentBreachFlowField = getFlowField(bx, by);
@@ -1074,9 +1087,19 @@ function update() {
                         }
                     }
                 }
-            } else if (!h.breachTarget) {
+            } else if (!h.breachTarget && isOnBoard) {
                 // Meatshield Aura: Pull nearby grunts to protect it if no active breach!
+                let bodyguardsAssigned = 0;
                 for (let oh of horde) {
+                    if (oh.type !== 'brain' && oh.aggroTicks > 0) {
+                        let ddx = (oh.x+10) - (h.x+10);
+                        let ddy = (oh.y+10) - (h.y+10);
+                        if (ddx*ddx + ddy*ddy < 150*150) bodyguardsAssigned++;
+                    }
+                }
+                
+                for (let oh of horde) {
+                    if (bodyguardsAssigned >= 3) break;
                     if (oh.type !== 'brain' && (!oh.aggroTicks || oh.aggroTicks <= 0)) {
                         let ddx = (oh.x+10) - (h.x+10);
                         let ddy = (oh.y+10) - (h.y+10);
@@ -1085,17 +1108,12 @@ function update() {
                             oh.aggroX = h.x + 10 + (Math.random()-0.5)*80;
                             oh.aggroY = h.y + 10 + (Math.random()-0.5)*80;
                             oh.aggroTicks = 15; 
+                            bodyguardsAssigned++;
                         }
                     }
                 }
             }
         }
-        
-        let cx = Math.floor((h.x + 10) / CELL_SIZE);
-        let cy = Math.floor((h.y + 10) / CELL_SIZE);
-        
-        if (cx < 0) cx = 0; if (cx >= COLS) cx = COLS - 1;
-        if (cy < 0) cy = 0; if (cy >= ROWS) cy = ROWS - 1;
         
         let inCell = grid[cx][cy];
         let cellTerrain = terrain[cx][cy];
