@@ -532,7 +532,7 @@ function getClaymoreTriggerCells(gx, gy, angle, range) {
             
             if (tx >= 0 && tx < COLS && ty >= 0 && ty < ROWS) {
                 let cellT = terrain[tx][ty];
-                if (cellT === 2 || cellT === 3) break; // block
+                if ((cellT === 2 || cellT === 3) && (tx !== gx || ty !== gy)) break; // block if it hits another rock/wall
                 lastValidGridX = tx;
                 lastValidGridY = ty;
             } else {
@@ -1105,24 +1105,41 @@ function update() {
                     }
                 }
                 
-                // If a target is active, command the horde to breach it
+                // If a target is active, command exactly 1/3 of the horde to breach it
                 if (h.breachTarget && isOnBoard) {
                     let bx = Math.floor(h.breachTarget.x / CELL_SIZE);
                     let by = Math.floor(h.breachTarget.y / CELL_SIZE);
                     currentBreachFlowField = getFlowField(bx, by);
                     
+                    let numGrunts = 0;
+                    let numBreaching = 0;
+                    let availableForBreach = [];
+                    
                     for (let oh of horde) {
-                        if (oh.type !== 'brain' && oh.squad === 'B') {
+                        if (oh.type !== 'brain') {
+                            numGrunts++;
                             let ocx = Math.floor((oh.x+10)/CELL_SIZE);
                             let ocy = Math.floor((oh.y+10)/CELL_SIZE);
                             let distToKeep = (flowField && flowField[ocx] && flowField[ocx][ocy] !== undefined) ? flowField[ocx][ocy] : 9999;
                             
-                            // Only flank if they aren't already deep inside the castle defenses!
-                            if (distToKeep > 15) {
-                                oh.breaching = 120; // Squad B flanks toward weak point
+                            if (oh.squad === 'B') {
+                                numBreaching++;
+                                oh.breaching = 120;
                                 oh.aggroTicks = 0;
+                            } else if (distToKeep > 15) {
+                                availableForBreach.push(oh);
                             }
                         }
+                    }
+                    
+                    let targetBreachers = Math.floor(numGrunts / 3);
+                    while (numBreaching < targetBreachers && availableForBreach.length > 0) {
+                        let idx = Math.floor(Math.random() * availableForBreach.length);
+                        let chosen = availableForBreach.splice(idx, 1)[0];
+                        chosen.squad = 'B';
+                        chosen.breaching = 120;
+                        chosen.aggroTicks = 0;
+                        numBreaching++;
                     }
                 }
             } else if (!h.breachTarget && isOnBoard) {
