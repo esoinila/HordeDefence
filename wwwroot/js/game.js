@@ -1,6 +1,6 @@
 // Game Constants
-const COLS = 16;
-const ROWS = 16;
+const COLS = 20;
+const ROWS = 20;
 const CELL_SIZE = 40;
 const CANVAS_W = COLS * CELL_SIZE;
 const CANVAS_H = ROWS * CELL_SIZE;
@@ -11,8 +11,9 @@ const DEFENSES = {
     wire: { cost: 30, color: '#A9A9A9', symbol: '➰', hp: 100, slow: 0.3 }, 
     maxim: { cost: 150, color: '#2F4F4F', symbol: '🔫', hp: 50, fireRate: 10, range: 250, pierce: 4, dmg: 10 }, // Range drastically reduced!
     moat: { cost: 80, color: '#1a3b3a', symbol: '🐊', capacity: 5 },
-    moat: { cost: 80, color: '#1a3b3a', symbol: '🐊', capacity: 5 },
     oil:  { cost: 30, color: '#111111', symbol: '🛢️', hp: 50 },
+    generator: { cost: 80, color: '#00ced1', symbol: '⚡', hp: 50 },
+    decoy: { cost: 150, color: '#FFD700', symbol: '🎯', hp: 300 },
     claymore: { cost: 60, color: '#4A5D23', symbol: '💥', hp: 50, range: 120 }
 };
 
@@ -31,6 +32,7 @@ let maxHorde = 40;
 let spawnedHorde = 0;
 let gameOver = false;
 let victory = false;
+let brainSpawnedThisWave = false;
 let savedGrid = null; // Stores defense layout exactly as it was when the wave started
 let hoverX = -1;
 let hoverY = -1;
@@ -69,8 +71,10 @@ function generateTerrain() {
     }
     
     // Castle Keep in center (2x2)
-    terrain[7][7] = 3; terrain[8][7] = 3;
-    terrain[7][8] = 3; terrain[8][8] = 3;
+    let cx = Math.floor(COLS / 2) - 1;
+    let cy = Math.floor(ROWS / 2) - 1;
+    terrain[cx][cy] = 3; terrain[cx+1][cy] = 3;
+    terrain[cx][cy+1] = 3; terrain[cx+1][cy+1] = 3;
 
     // Generate clumped natural choke points using random walkers
     let numFeatures = 12; 
@@ -83,7 +87,9 @@ function generateTerrain() {
         
         for(let step = 0; step < length; step++) {
             if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS) {
-                let isCastle = (cx >= 6 && cx <= 9 && cy >= 6 && cy <= 9); // Buffer zone
+                let cX = Math.floor(COLS / 2) - 1;
+                let cY = Math.floor(ROWS / 2) - 1;
+                let isCastle = (cx >= cX - 2 && cx <= cX + 3 && cy >= cY - 2 && cy <= cY + 3); // Buffer zone
                 let isEdge = (cx === 0 || cx === COLS-1 || cy === 0 || cy === ROWS-1);
                 if (!isCastle && !isEdge) {
                     terrain[cx][cy] = type;
@@ -186,7 +192,7 @@ canvas.addEventListener('mousedown', (e) => {
     if (cellTerrain === 3) {
         log("Cannot build on the Castle Keep!", "error"); return;
     }
-    if (cellTerrain === 2) {
+    if (cellTerrain === 2 && selectedTool !== 'claymore') {
         log("Cannot build on solid rock!", "error"); return;
     }
 
@@ -326,6 +332,7 @@ function startWave() {
     horde = []; bullets = []; particles = [];
     spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0;
     spawnTicks = 0;
+    brainSpawnedThisWave = false;
     waterEaten = {};
     for (let x=0; x<COLS; x++) { for (let y=0; y<ROWS; y++) smokeMap[x][y] = 0; }
     
@@ -357,6 +364,7 @@ if (replayEntrenchBtn) {
         
         horde = []; bullets = []; particles = [];
         spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0; spawnTicks = 0;
+        brainSpawnedThisWave = false;
         
         // Hide battle buttons
         if (replayBtn) replayBtn.style.display = 'none';
@@ -385,6 +393,7 @@ tryAgainBtn.addEventListener('click', () => {
     
     horde = []; bullets = []; particles = [];
     spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0; spawnTicks = 0;
+    brainSpawnedThisWave = false;
     
     log("Defenses restored! +200 Supplies granted. Fortify your position!", "build");
     draw();
@@ -477,6 +486,7 @@ if (importBtn) {
                     
                     horde = []; bullets = []; particles = [];
                     spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0; spawnTicks = 0;
+                    brainSpawnedThisWave = false;
                     
                     if (replayBtn) replayBtn.style.display = 'none';
                     if (replayEntrenchBtn) replayEntrenchBtn.style.display = 'none';
@@ -609,9 +619,21 @@ function getFlowField() {
     }
     
     let queue = [];
-    distances[7][7] = 0; distances[8][7] = 0;
-    distances[7][8] = 0; distances[8][8] = 0;
-    queue.push({x:7, y:7}, {x:8, y:7}, {x:7, y:8}, {x:8, y:8});
+    let cx = Math.floor(COLS / 2) - 1;
+    let cy = Math.floor(ROWS / 2) - 1;
+    distances[cx][cy] = 0; distances[cx+1][cy] = 0;
+    distances[cx][cy+1] = 0; distances[cx+1][cy+1] = 0;
+    queue.push({x:cx, y:cy}, {x:cx+1, y:cy}, {x:cx, y:cy+1}, {x:cx+1, y:cy+1});
+    
+    // Add Decoys as competing 0-distance targets!
+    for (let x = 0; x < COLS; x++) {
+        for (let y = 0; y < ROWS; y++) {
+            if (grid[x][y] && grid[x][y].type === 'decoy') {
+                distances[x][y] = 0;
+                queue.push({x: x, y: y});
+            }
+        }
+    }
     
     while(queue.length > 0) {
         let curr = queue.shift();
@@ -686,11 +708,30 @@ function spawnHorde() {
     else if (side === 2) { sx = Math.random()*CANVAS_W; sy = CANVAS_H + 10; }
     else { sx = -10; sy = Math.random()*CANVAS_H; }
     
-    horde.push({
-        x: sx, y: sy, hp: 30, speed: 1.0 + Math.random() * 1.5,
-        slipTime: 0, slipDirX: 0, slipDirY: 0, spin: 0, frame: 0,
-        wigglePhase: Math.random() * Math.PI * 2
-    });
+    let isBrain = false;
+    let waveScale = maxHorde / 40; // Wave 1 is ~40
+    let brainChance = 0.05 * waveScale; // 5% chance scaling up
+    if (!brainSpawnedThisWave && Math.random() < brainChance) {
+        isBrain = true;
+        brainSpawnedThisWave = true;
+    }
+    
+    if (isBrain) {
+        horde.push({
+            x: sx, y: sy, hp: 150, speed: 0.8,
+            slipTime: 0, slipDirX: 0, slipDirY: 0, spin: 0, frame: 0,
+            wigglePhase: Math.random() * Math.PI * 2,
+            type: 'brain', lastCommandTick: 0
+        });
+        log("A mutated BRAIN has spawned! It's directing the swarm!", "error");
+    } else {
+        horde.push({
+            x: sx, y: sy, hp: 30, speed: 1.0 + Math.random() * 1.5,
+            slipTime: 0, slipDirX: 0, slipDirY: 0, spin: 0, frame: 0,
+            wigglePhase: Math.random() * Math.PI * 2,
+            type: 'grunt'
+        });
+    }
     spawnedHorde++;
 }
 
@@ -699,9 +740,11 @@ function explodeCastle() {
     if (castleExplosion === 0) {
         log("THE KEEP HAS FALLEN! BOOM!", "error");
         castleExplosion = 1;
+        let cX = Math.floor(COLS / 2) - 1;
+        let cY = Math.floor(ROWS / 2) - 1;
         for(let i=0; i<300; i++) {
             particles.push({
-                x: 8 * CELL_SIZE, y: 8 * CELL_SIZE,
+                x: (cX + 1) * CELL_SIZE, y: (cY + 1) * CELL_SIZE,
                 vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20,
                 life: 30 + Math.random() * 50,
                 color: Math.random() > 0.5 ? 'red' : 'orange'
@@ -781,8 +824,8 @@ function update() {
                     let cy = y * CELL_SIZE + CELL_SIZE/2;
                     
                     log("💥 CLAYMORE DETONATED in the smoke! Sector scrubbed!", "kill");
-                    createParticles(cx, cy, 'orange', 150);
-                    createParticles(cx, cy, 'black', 50);
+                    createParticles(cx, cy, 'orange', 150, cell.facingAngle, 0.8);
+                    createParticles(cx, cy, 'black', 50, cell.facingAngle, 0.8);
                     
                     for (let i = horde.length - 1; i >= 0; i--) {
                         let h = horde[i];
@@ -806,6 +849,13 @@ function update() {
                             }
                         }
                     }
+                    grid[x][y] = null;
+                }
+            } else if (cell.type === 'oil' && cell.burning) {
+                cell.burnTicks--;
+                cell.hp -= (50 / 600);
+                if (Math.random() < 0.2) createParticles(x*CELL_SIZE + 20, y*CELL_SIZE + 20, 'orange', 3);
+                if (cell.hp <= 0 || cell.burnTicks <= 0) {
                     grid[x][y] = null;
                 }
             } else if (cell.type === 'maxim') {
@@ -915,9 +965,14 @@ function update() {
         let by = Math.floor(b.y / CELL_SIZE);
         if (bx >= 0 && bx < COLS && by >= 0 && by < ROWS) {
             let t = terrain[bx][by];
+            let cellObj = grid[bx][by];
             if (t === 2 || t === 3) {
                 b.pierceLeft = 0; 
                 createParticles(b.x, b.y, '#888', 5); 
+            } else if (cellObj && cellObj.type === 'oil' && !cellObj.burning) {
+                cellObj.burning = true;
+                cellObj.burnTicks = 600; // 10 seconds tracking
+                log("Oil slick ignited by stray bullet!", "wave");
             }
         }
         
@@ -952,6 +1007,41 @@ function update() {
         let h = horde[i];
         h.frame++;
         
+        if (h.type === 'brain' && h.frame - (h.lastCommandTick || 0) > 60) {
+            h.lastCommandTick = h.frame;
+            let brainRadius = 250;
+            let nearestDef = null;
+            let minDist = brainRadius * brainRadius;
+            for (let xx=0; xx<COLS; xx++) {
+                for (let yy=0; yy<ROWS; yy++) {
+                    let cellObj = grid[xx][yy];
+                    if (cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'maxim' || cellObj.type === 'generator' || cellObj.type === 'decoy')) {
+                        let dcx = xx * CELL_SIZE + CELL_SIZE/2;
+                        let dcy = yy * CELL_SIZE + CELL_SIZE/2;
+                        let distSq = Math.pow((h.x+10)-dcx, 2) + Math.pow((h.y+10)-dcy, 2);
+                        if (distSq < minDist) {
+                            minDist = distSq;
+                            nearestDef = {x: dcx, y: dcy};
+                        }
+                    }
+                }
+            }
+            if (nearestDef) {
+                createParticles(h.x+10, h.y+10, 'magenta', 15);
+                for (let oh of horde) {
+                    if (oh.type !== 'brain') {
+                        let ddx = (oh.x+10) - (h.x+10);
+                        let ddy = (oh.y+10) - (h.y+10);
+                        if (ddx*ddx + ddy*ddy <= brainRadius * brainRadius) {
+                            oh.aggroX = nearestDef.x;
+                            oh.aggroY = nearestDef.y;
+                            oh.aggroTicks = 60; // Persist until next command!
+                        }
+                    }
+                }
+            }
+        }
+        
         let cx = Math.floor((h.x + 10) / CELL_SIZE);
         let cy = Math.floor((h.y + 10) / CELL_SIZE);
         
@@ -965,7 +1055,7 @@ function update() {
         let wiggleY = Math.sin(h.frame * 0.1 + h.wigglePhase) * 0.5;
         
         // Smoke Tactics! If Horde member is in High Danger LOS but no smoke exists here
-        if (currentDangerMap && currentDangerMap[cx][cy] > 0 && smokeMap[cx][cy] <= 0) {
+        if (h.type !== 'brain' && currentDangerMap && currentDangerMap[cx][cy] > 0 && smokeMap[cx][cy] <= 0) {
             // Very high chance per second (0.02/frame = 120%/sec) to pop smoke and sacrifice
             if (Math.random() < 0.02) {
                 smokeMap[cx][cy] = 100; // About 1.6 seconds of thick cover!
@@ -1003,6 +1093,16 @@ function update() {
         
         // Oil Slick
         if (inCell && inCell.type === 'oil') {
+            if (inCell.burning) {
+                h.hp -= 5;
+                createParticles(h.x, h.y, 'orange', 2);
+                if (h.hp <= 0) {
+                    horde.splice(i, 1);
+                    supplies++; totalKills++;
+                    if (totalKills % 10 === 0) log(`Kills: ${totalKills}`, 'kill');
+                    continue;
+                }
+            }
             if (h.slipTime <= 0) {
                 h.slipTime = 40; 
                 let angle = Math.random() * Math.PI * 2;
@@ -1013,6 +1113,29 @@ function update() {
         let currentSpeed = h.speed;
         if (inCell && inCell.type === 'wire') {
             currentSpeed *= DEFENSES.wire.slow;
+            
+            // Electric Fence Logic!
+            let electrified = false;
+            let dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+            for (let d of dirs) {
+                let adjX = cx + d[0]; let adjY = cy + d[1];
+                if (adjX >= 0 && adjX < COLS && adjY >= 0 && adjY < ROWS) {
+                    if (grid[adjX][adjY] && grid[adjX][adjY].type === 'generator') {
+                        electrified = true; break;
+                    }
+                }
+            }
+            
+            if (electrified) {
+                h.hp -= 3; // shock damage per frame (quite heavy)
+                if (Math.random() < 0.1) createParticles(h.x, h.y, 'cyan', 2);
+                if (h.hp <= 0) {
+                    horde.splice(i, 1); supplies++; totalKills++;
+                    if (totalKills % 10 === 0) log(`Kills: ${totalKills}`, 'kill');
+                    continue; // Skip rest of loop for this horde member
+                }
+            }
+            
             if (h.frame % 10 === 0) {
                 inCell.hp -= 2; // Demolishing wire over time
                 if (inCell.hp <= 0) {
@@ -1068,12 +1191,20 @@ function update() {
         
         let tx = 0, ty = 0, usingAggro = false;
         if (h.aggroX !== undefined) {
-            // Horde member has been aggro'd by a nearby Maxim!
+            // Horde member has been aggro'd by a nearby Maxim or Brain!
             tx = h.aggroX; ty = h.aggroY;
             usingAggro = true;
             // Clear aggro so it must be refreshed next frame by the Maxim scanning it
-            h.aggroX = undefined;
-            h.aggroY = undefined;
+            if (!h.aggroTicks) {
+                h.aggroX = undefined;
+                h.aggroY = undefined;
+            } else {
+                h.aggroTicks--;
+                if (h.aggroTicks <= 0) {
+                    h.aggroX = undefined;
+                    h.aggroY = undefined;
+                }
+            }
         } else if (flowField) {
             let bestX = cx; let bestY = cy;
             let minD = flowField[cx][cy] !== undefined ? flowField[cx][cy] : 999999;
@@ -1109,15 +1240,19 @@ function update() {
             let targetTerrain = terrain[bestX][bestY];
             
             let isWaterTarget = targetTerrain === 1 && (!targetDef || (targetDef.type !== 'bridge' && targetDef.type !== 'hordeLadder'));
-            let isSolidDef = targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat' || targetDef.type === 'maxim');
+            let isSolidDef = targetDef && (targetDef.type === 'trench' || targetDef.type === 'moat' || targetDef.type === 'maxim' || targetDef.type === 'decoy' || targetDef.type === 'generator');
             
             if (isSolidDef || isWaterTarget) {
                 // Cannot move into it, must demolish or sacrifice!
-                if (isSolidDef && (targetDef.type === 'trench' || targetDef.type === 'maxim')) {
+                if (isSolidDef && (targetDef.type === 'trench' || targetDef.type === 'maxim' || targetDef.type === 'decoy' || targetDef.type === 'generator')) {
                     targetDef.hp -= 0.5; // Many horde attacking = fast demolition
                     createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, 'brown', 1);
                     if (targetDef.hp <= 0) {
-                        let msg = targetDef.type === 'maxim' ? "A Maxim Gun was destroyed in melee!" : "Trench breached by the horde!";
+                        let msg = "Defense breached by the horde!";
+                        if (targetDef.type === 'maxim') msg = "A Maxim Gun was destroyed in melee!";
+                        else if (targetDef.type === 'decoy') msg = "The Tactical Decoy has been destroyed!";
+                        else if (targetDef.type === 'generator') msg = "A Generator has been taken offline!";
+                        else if (targetDef.type === 'trench') msg = "Trench breached by the horde!";
                         grid[bestX][bestY] = null;
                         log(msg, 'error');
                         createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, '#888', 20);
@@ -1188,11 +1323,21 @@ function updateParticles() {
     }
 }
 
-function createParticles(x, y, color, count) {
+function createParticles(x, y, color, count, baseAngle = null, spread = null) {
     for (let i = 0; i < count; i++) {
+        let vx, vy;
+        if (baseAngle !== null && spread !== null) {
+            let a = baseAngle + (Math.random() - 0.5) * spread;
+            let speed = Math.random() * 5 + 2;
+            vx = Math.cos(a) * speed;
+            vy = Math.sin(a) * speed;
+        } else {
+            vx = (Math.random() - 0.5) * 5;
+            vy = (Math.random() - 0.5) * 5;
+        }
         particles.push({
             x: x, y: y,
-            vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5,
+            vx: vx, vy: vy,
             life: 10 + Math.random() * 15, color: color
         });
     }
@@ -1287,8 +1432,10 @@ function draw() {
     }
     
     if (!castleExplosion) {
-        ctx.fillStyle = '#444'; ctx.fillRect(7*CELL_SIZE + 10, 7*CELL_SIZE + 10, 2*CELL_SIZE - 20, 2*CELL_SIZE - 20);
-        ctx.fillStyle = 'black'; ctx.fillRect(7*CELL_SIZE + 30, 8*CELL_SIZE - 10, 20, 20); 
+        let cX = Math.floor(COLS / 2) - 1;
+        let cY = Math.floor(ROWS / 2) - 1;
+        ctx.fillStyle = '#444'; ctx.fillRect(cX*CELL_SIZE + 10, cY*CELL_SIZE + 10, 2*CELL_SIZE - 20, 2*CELL_SIZE - 20);
+        ctx.fillStyle = 'black'; ctx.fillRect(cX*CELL_SIZE + 30, (cY+1)*CELL_SIZE - 10, 20, 20); 
     }
     
     ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1354,7 +1501,7 @@ function draw() {
                 if (cell.type === 'moat') {
                     ctx.fillStyle = 'rgba(255,0,0,0.5)';
                     ctx.fillRect(px, py + CELL_SIZE - 5, (cell.capacity / DEFENSES[cell.type].capacity) * CELL_SIZE, 5);
-                } else if (cell.type === 'trench' || cell.type === 'oil' || cell.type === 'maxim') {
+                } else if (cell.type === 'trench' || cell.type === 'oil' || cell.type === 'maxim' || cell.type === 'generator' || cell.type === 'decoy') {
                     ctx.fillStyle = 'rgba(0,255,0,0.5)';
                     ctx.fillRect(px, py + CELL_SIZE - 5, (cell.hp / DEFENSES[cell.type].hp) * CELL_SIZE, 5);
                 } else if (cell.type === 'hordeLadder') {
@@ -1414,23 +1561,36 @@ function draw() {
             ctx.translate(h.x + 10, h.y + 10);
             if (h.spin !== 0) ctx.rotate(h.spin);
             
-            ctx.fillStyle = '#ffcc99'; 
-            ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
-            
-            ctx.fillStyle = 'black';
-            ctx.fillRect(-4, -4, 2, 2); ctx.fillRect(2, -4, 2, 2);
-            
-            ctx.strokeStyle = h.spin ? 'red' : 'black';
-            ctx.beginPath();
-            if (h.spin) {
-                ctx.arc(0, 4, 3, 0, Math.PI*2); ctx.stroke();
+            if (h.type === 'brain') {
+                // Pulsing pink head
+                let pulse = Math.sin(h.frame * 0.1) * 3;
+                ctx.fillStyle = '#ff69b4';
+                ctx.beginPath(); ctx.arc(0, 0, 10 + pulse, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'magenta';
+                ctx.beginPath(); ctx.arc(0, 0, 6 + pulse/2, 0, Math.PI*2); ctx.fill();
+                // Eyes
+                ctx.fillStyle = 'black';
+                ctx.fillRect(-5, -5, 2, 2); ctx.fillRect(3, -5, 2, 2);
             } else {
-                ctx.moveTo(-4, 2); ctx.lineTo(0, 0); ctx.lineTo(4, 2); ctx.stroke();
+                ctx.fillStyle = '#ffcc99'; 
+                ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
+                
+                ctx.fillStyle = 'black';
+                ctx.fillRect(-4, -4, 2, 2); ctx.fillRect(2, -4, 2, 2);
+                
+                ctx.strokeStyle = h.spin ? 'red' : 'black';
+                ctx.beginPath();
+                if (h.spin) {
+                    ctx.arc(0, 4, 3, 0, Math.PI*2); ctx.stroke();
+                } else {
+                    ctx.moveTo(-4, 2); ctx.lineTo(0, 0); ctx.lineTo(4, 2); ctx.stroke();
+                }
             }
             ctx.restore();
             
             ctx.fillStyle = 'red';
-            ctx.fillRect(h.x, h.y - 4, 20 * (h.hp/30), 2);
+            let maxHp = h.type === 'brain' ? 150 : 30;
+            ctx.fillRect(h.x, h.y - 4, 20 * (h.hp/maxHp), 2);
         }
         
         ctx.fillStyle = 'yellow';
