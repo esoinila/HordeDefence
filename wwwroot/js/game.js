@@ -610,7 +610,7 @@ function getDangerMap() {
     return dangerMap;
 }
 
-function getFlowField() {
+function getFlowField(customTargetX = -1, customTargetY = -1) {
     let dangerMap = getDangerMap();
     let distances = [];
     for (let x = 0; x < COLS; x++) {
@@ -619,18 +619,23 @@ function getFlowField() {
     }
     
     let queue = [];
-    let cx = Math.floor(COLS / 2) - 1;
-    let cy = Math.floor(ROWS / 2) - 1;
-    distances[cx][cy] = 0; distances[cx+1][cy] = 0;
-    distances[cx][cy+1] = 0; distances[cx+1][cy+1] = 0;
-    queue.push({x:cx, y:cy}, {x:cx+1, y:cy}, {x:cx, y:cy+1}, {x:cx+1, y:cy+1});
-    
-    // Add Decoys as competing 0-distance targets!
-    for (let x = 0; x < COLS; x++) {
-        for (let y = 0; y < ROWS; y++) {
-            if (grid[x][y] && grid[x][y].type === 'decoy') {
-                distances[x][y] = 0;
-                queue.push({x: x, y: y});
+    if (customTargetX !== -1 && customTargetY !== -1) {
+        distances[customTargetX][customTargetY] = 0;
+        queue.push({x: customTargetX, y: customTargetY});
+    } else {
+        let cx = Math.floor(COLS / 2) - 1;
+        let cy = Math.floor(ROWS / 2) - 1;
+        distances[cx][cy] = 0; distances[cx+1][cy] = 0;
+        distances[cx][cy+1] = 0; distances[cx+1][cy+1] = 0;
+        queue.push({x:cx, y:cy}, {x:cx+1, y:cy}, {x:cx, y:cy+1}, {x:cx+1, y:cy+1});
+        
+        // Add Decoys as competing 0-distance targets!
+        for (let x = 0; x < COLS; x++) {
+            for (let y = 0; y < ROWS; y++) {
+                if (grid[x][y] && grid[x][y].type === 'decoy') {
+                    distances[x][y] = 0;
+                    queue.push({x: x, y: y});
+                }
             }
         }
     }
@@ -699,6 +704,7 @@ function getFlowField() {
 }
 
 let flowField = null;
+let currentBreachFlowField = null;
 
 function spawnHorde() {
     let side = Math.floor(Math.random() * 4); // 0:Top, 1:Right, 2:Bottom, 3:Left
@@ -718,12 +724,12 @@ function spawnHorde() {
     
     if (isBrain) {
         horde.push({
-            x: sx, y: sy, hp: 150, speed: 0.8,
+            x: sx, y: sy, hp: 20, speed: 0.3,
             slipTime: 0, slipDirX: 0, slipDirY: 0, spin: 0, frame: 0,
             wigglePhase: Math.random() * Math.PI * 2,
             type: 'brain', lastCommandTick: 0
         });
-        log("A mutated BRAIN has spawned! It's directing the swarm!", "error");
+        log("A mutated BRAIN has spawned! It's slow and weak, but commands the swarm!", "error");
     } else {
         horde.push({
             x: sx, y: sy, hp: 30, speed: 1.0 + Math.random() * 1.5,
@@ -1012,37 +1018,73 @@ function update() {
             
             if (h.frame - (h.lastCommandTick || 0) > 120) {
                 h.lastCommandTick = h.frame;
-                let minDanger = 999999;
-                let weakPoints = [];
-                for (let xx=0; xx<COLS; xx++) {
-                    for (let yy=0; yy<ROWS; yy++) {
-                        let cellObj = grid[xx][yy];
-                        if (cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'generator' || cellObj.type === 'decoy')) {
-                            let danger = currentDangerMap ? currentDangerMap[xx][yy] : 0;
-                            if (danger < minDanger) {
-                                minDanger = danger;
-                                weakPoints = [{x: xx, y: yy}];
-                            } else if (danger === minDanger) {
-                                weakPoints.push({x: xx, y: yy});
+                
+                // Check if current breach target still exists
+                let targetStillExists = false;
+                if (h.breachTarget) {
+                    let bx = Math.floor(h.breachTarget.x / CELL_SIZE);
+                    let by = Math.floor(h.breachTarget.y / CELL_SIZE);
+                    if (grid[bx][by]) {
+                        targetStillExists = true;
+                    } else {
+                        h.breachTarget = null;
+                        log("Breach target destroyed! The BRAIN is scanning...", "wave");
+                    }
+                }
+                
+                if (!targetStillExists) {
+                    let minDanger = 999999;
+                    let weakPoints = [];
+                    for (let xx=0; xx<COLS; xx++) {
+                        for (let yy=0; yy<ROWS; yy++) {
+                            let cellObj = grid[xx][yy];
+                            if (cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'generator' || cellObj.type === 'decoy')) {
+                                let danger = currentDangerMap ? currentDangerMap[xx][yy] : 0;
+                                if (danger < minDanger) {
+                                    minDanger = danger;
+                                    weakPoints = [{x: xx, y: yy}];
+                                } else if (danger === minDanger) {
+                                    weakPoints.push({x: xx, y: yy});
+                                }
                             }
                         }
                     }
+                    if (weakPoints.length > 0) {
+                        let wp = weakPoints[Math.floor(Math.random() * weakPoints.length)];
+                        let dcx = wp.x * CELL_SIZE + CELL_SIZE/2;
+                        let dcy = wp.y * CELL_SIZE + CELL_SIZE/2;
+                        
+                        h.breachTarget = {x: dcx, y: dcy};
+                        h.lightbulbTicks = 60;
+                        createParticles(h.x+10, h.y+10, 'yellow', 15);
+                        log("The BRAIN identified a blind spot! The horde is changing direction!", "error");
+                    }
                 }
-                if (weakPoints.length > 0) {
-                    let wp = weakPoints[Math.floor(Math.random() * weakPoints.length)];
-                    let dcx = wp.x * CELL_SIZE + CELL_SIZE/2;
-                    let dcy = wp.y * CELL_SIZE + CELL_SIZE/2;
-                    
-                    h.breachTarget = {x: dcx, y: dcy};
-                    h.lightbulbTicks = 60;
-                    createParticles(h.x+10, h.y+10, 'yellow', 15);
-                    log("The BRAIN identified a blind spot! The horde is changing direction!", "error");
+                
+                // If a target is active, command the horde to breach it
+                if (h.breachTarget) {
+                    let bx = Math.floor(h.breachTarget.x / CELL_SIZE);
+                    let by = Math.floor(h.breachTarget.y / CELL_SIZE);
+                    currentBreachFlowField = getFlowField(bx, by);
                     
                     for (let oh of horde) {
                         if (oh.type !== 'brain') {
-                            oh.aggroX = dcx;
-                            oh.aggroY = dcy;
-                            oh.aggroTicks = 120; // Surge towards weak point
+                            oh.breaching = 120; // Surge towards weak point using the breach flow field
+                            oh.aggroTicks = 0;  // clear standard aggro override
+                        }
+                    }
+                }
+            } else if (!h.breachTarget) {
+                // Meatshield Aura: Pull nearby grunts to protect it if no active breach!
+                for (let oh of horde) {
+                    if (oh.type !== 'brain' && (!oh.aggroTicks || oh.aggroTicks <= 0)) {
+                        let ddx = (oh.x+10) - (h.x+10);
+                        let ddy = (oh.y+10) - (h.y+10);
+                        let distSq = ddx*ddx + ddy*ddy;
+                        if (distSq > 40*40 && distSq < 150*150) {
+                            oh.aggroX = h.x + 10 + (Math.random()-0.5)*80;
+                            oh.aggroY = h.y + 10 + (Math.random()-0.5)*80;
+                            oh.aggroTicks = 15; 
                         }
                     }
                 }
@@ -1120,9 +1162,9 @@ function update() {
         let currentSpeed = h.speed;
         if (h.type === 'brain') {
             if (horde.length > 1) {
-                currentSpeed = 0.15; // Linger in the back unless alone
+                currentSpeed = 0.1; // Linger slowly in the back unless alone
             } else {
-                currentSpeed = 1.0; // Charge if alone!
+                currentSpeed = 0.5; // Very slow even when alone!
             }
         }
         
@@ -1204,9 +1246,11 @@ function update() {
             h.spin = 0; 
         }
         
+        if (h.breaching && h.breaching > 0) h.breaching--;
+        
         let tx = 0, ty = 0, usingAggro = false;
         if (h.aggroX !== undefined) {
-            // Horde member has been aggro'd by a nearby Maxim or Brain!
+            // Horde member has been aggro'd by a nearby Maxim!
             tx = h.aggroX; ty = h.aggroY;
             usingAggro = true;
             // Clear aggro so it must be refreshed next frame by the Maxim scanning it
@@ -1220,9 +1264,29 @@ function update() {
                     h.aggroY = undefined;
                 }
             }
+        }
+        
+        let bestX = cx; let bestY = cy;
+        let activeField = (h.breaching > 0 && currentBreachFlowField) ? currentBreachFlowField : flowField;
+        
+        if (usingAggro) {
+            let dx = tx - (h.x + 10);
+            let dy = ty - (h.y + 10);
+            // Translate the desired vector into the best adjacent grid cell!
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                let pdx = Math.round(dx / Math.max(Math.abs(dx), Math.abs(dy), 1));
+                let pdy = Math.round(dy / Math.max(Math.abs(dx), Math.abs(dy), 1));
+                let nx = cx + pdx;
+                let ny = cy + pdy;
+                if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+                    bestX = nx; bestY = ny;
+                }
+            } else {
+                // If they are basically at the target coordinates, just stay in cx, cy
+                bestX = cx; bestY = cy;
+            }
         } else if (flowField) {
-            let bestX = cx; let bestY = cy;
-            let minD = flowField[cx][cy] !== undefined ? flowField[cx][cy] : 999999;
+            let minD = activeField[cx][cy] !== undefined ? activeField[cx][cy] : 999999;
             
             let dirs = [[-1,0], [0,-1], [0,1], [1,0], [-1,-1], [-1,1], [1,-1], [1,1]];
             for(let d of dirs) {
@@ -1233,25 +1297,26 @@ function update() {
                     let nx1 = cx + d[0], ny1 = cy;
                     if (nx1>=0 && nx1<COLS && ny1>=0 && ny1<ROWS) {
                         let ct = terrain[nx1][ny1], cd = grid[nx1][ny1];
-                        b1 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'));
+                        b1 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'||cd.type==='generator'||cd.type==='decoy'));
                     }
                     let nx2 = cx, ny2 = cy + d[1];
                     if (nx2>=0 && nx2<COLS && ny2>=0 && ny2<ROWS) {
                         let ct = terrain[nx2][ny2], cd = grid[nx2][ny2];
-                        b2 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'));
+                        b2 = ct===2 || (ct===1 && (!cd || (cd.type!=='bridge' && cd.type!=='hordeLadder'))) || (cd && (cd.type==='trench'||cd.type==='moat'||cd.type==='maxim'||cd.type==='generator'||cd.type==='decoy'));
                     }
                     if (b1 || b2) continue;
                 }
                 
                 if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
-                    if (flowField[nx][ny] < minD) {
-                        minD = flowField[nx][ny]; bestX = nx; bestY = ny;
+                    if (activeField[nx][ny] < minD) {
+                        minD = activeField[nx][ny]; bestX = nx; bestY = ny;
                     }
                 }
             }
-            
-            // Check if the target cell is a solid blocking defense or natural water
-            let targetDef = grid[bestX][bestY];
+        }
+        
+        // Regardless of aggro or flowfield, now we evaluate the chosen bestX, bestY target!
+        let targetDef = grid[bestX][bestY];
             let targetTerrain = terrain[bestX][bestY];
             
             let isWaterTarget = targetTerrain === 1 && (!targetDef || (targetDef.type !== 'bridge' && targetDef.type !== 'hordeLadder'));
@@ -1259,7 +1324,7 @@ function update() {
             
             if (isSolidDef || isWaterTarget) {
                 // Cannot move into it, must demolish or sacrifice!
-                if (isSolidDef && (targetDef.type === 'trench' || targetDef.type === 'maxim' || targetDef.type === 'decoy' || targetDef.type === 'generator')) {
+                if (h.type !== 'brain' && isSolidDef && (targetDef.type === 'trench' || targetDef.type === 'maxim' || targetDef.type === 'decoy' || targetDef.type === 'generator')) {
                     targetDef.hp -= 0.5; // Many horde attacking = fast demolition
                     createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, 'brown', 1);
                     if (targetDef.hp <= 0) {
@@ -1273,7 +1338,7 @@ function update() {
                         createParticles(bestX*CELL_SIZE+20, bestY*CELL_SIZE+20, '#888', 20);
                     }
                 } else if ((isSolidDef && targetDef.type === 'moat') || isWaterTarget) {
-                    if (h.frame % 30 === 0) {
+                    if (h.type !== 'brain' && h.frame % 30 === 0) {
                         if (isWaterTarget) {
                             let k = bestX + ',' + bestY;
                             waterEaten[k] = (waterEaten[k] || 0) + 1;
@@ -1305,15 +1370,6 @@ function update() {
                 let len = Math.sqrt(dx*dx + dy*dy);
                 if (len > 1) {
                     h.x += (dx/len) * currentSpeed + wiggleX; h.y += (dy/len) * currentSpeed + wiggleY;
-                }
-            }
-        }
-        
-        if (usingAggro) {
-            let dx = tx - (h.x + 10); let dy = ty - (h.y + 10);
-            let len = Math.sqrt(dx*dx + dy*dy);
-            if (len > 1) {
-                h.x += (dx/len) * currentSpeed + wiggleX; h.y += (dy/len) * currentSpeed + wiggleY;
             }
         }
     }
@@ -1609,7 +1665,7 @@ function draw() {
             ctx.restore();
             
             ctx.fillStyle = 'red';
-            let maxHp = h.type === 'brain' ? 150 : 30;
+            let maxHp = h.type === 'brain' ? 20 : 30;
             ctx.fillRect(h.x, h.y - 4, 20 * (h.hp/maxHp), 2);
         }
         
