@@ -50,6 +50,7 @@ const buildBtns = document.querySelectorAll('.build-btn');
 const startBtn = document.getElementById('startWaveBtn');
 const restartBtn = document.getElementById('restartBtn');
 const replayBtn = document.getElementById('replayBtn');
+const replayEntrenchBtn = document.getElementById('replayEntrenchBtn');
 const tryAgainBtn = document.getElementById('tryAgainBtn');
 const nextWaveBtn = document.getElementById('nextWaveBtn');
 const rerollBtn = document.getElementById('rerollBtn');
@@ -251,10 +252,11 @@ function restoreGridState() {
             }
         }
     }
-    replayBtn.style.display = 'none';
-    nextWaveBtn.style.display = 'none';
-    restartBtn.style.display = 'none';
-    tryAgainBtn.style.display = 'none';
+    if (replayBtn) replayBtn.style.display = 'none';
+    if (replayEntrenchBtn) replayEntrenchBtn.style.display = 'none';
+    if (nextWaveBtn) nextWaveBtn.style.display = 'none';
+    if (restartBtn) restartBtn.style.display = 'none';
+    if (tryAgainBtn) tryAgainBtn.style.display = 'none';
     log("Defenses restored!", "build");
     draw();
 }
@@ -289,6 +291,31 @@ replayBtn.addEventListener('click', () => {
     restoreGridState();
     startWave();
 });
+
+if (replayEntrenchBtn) {
+    replayEntrenchBtn.addEventListener('click', () => {
+        phase = 'entrench';
+        phaseDisplay.innerText = "ENTRENCHMENT PHASE";
+        phaseDisplay.className = "text-primary font-weight-bold";
+        
+        startBtn.style.display = 'block';
+        rerollBtn.style.display = 'block';
+        buildBtns.forEach(b => b.disabled = false);
+        
+        horde = []; bullets = []; particles = [];
+        spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0; spawnTicks = 0;
+        
+        // Hide battle buttons
+        if (replayBtn) replayBtn.style.display = 'none';
+        replayEntrenchBtn.style.display = 'none';
+        if (tryAgainBtn) tryAgainBtn.style.display = 'none';
+        if (nextWaveBtn) nextWaveBtn.style.display = 'none';
+        if (restartBtn) restartBtn.style.display = 'none';
+        
+        log("Entrenchment phase! Build more defenses and launch the same wave!", "build");
+        draw();
+    });
+}
 
 tryAgainBtn.addEventListener('click', () => {
     restoreGridState();
@@ -882,9 +909,10 @@ function update() {
     if (spawnedHorde >= maxHorde && horde.length === 0) {
         gameOver = true; victory = true;
         log("WAVE DEFEATED! THE CASTLE STANDS!", "wave"); 
-        replayBtn.style.display = 'block';
-        nextWaveBtn.style.display = 'block';
-        restartBtn.style.display = 'block';
+        if (replayBtn) replayBtn.style.display = 'block';
+        if (replayEntrenchBtn) replayEntrenchBtn.style.display = 'block';
+        if (nextWaveBtn) nextWaveBtn.style.display = 'block';
+        if (restartBtn) restartBtn.style.display = 'block';
     }
     updateParticles();
     updateSupplies();
