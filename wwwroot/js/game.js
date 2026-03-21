@@ -11,8 +11,9 @@ const DEFENSES = {
     wire: { cost: 30, color: '#A9A9A9', symbol: '➰', hp: 100, slow: 0.3 }, 
     maxim: { cost: 150, color: '#2F4F4F', symbol: '🔫', hp: 50, fireRate: 10, range: 250, pierce: 4, dmg: 10 }, // Range drastically reduced!
     moat: { cost: 80, color: '#1a3b3a', symbol: '🐊', capacity: 5 },
+    moat: { cost: 80, color: '#1a3b3a', symbol: '🐊', capacity: 5 },
     oil:  { cost: 30, color: '#111111', symbol: '🛢️', hp: 50 },
-    bridge: { cost: 50, color: '#D2691E', symbol: '🌉', hp: 100 }
+    claymore: { cost: 60, color: '#4A5D23', symbol: '💥', hp: 50, range: 120 }
 };
 
 // Game State
@@ -37,6 +38,7 @@ let waterEaten = {};
 let smokeMap = [];
 for (let x=0; x<COLS; x++) { smokeMap[x] = []; for (let y=0; y<ROWS; y++) smokeMap[x][y] = 0; }
 let currentDangerMap = null;
+let placingClaymore = null;
 
 // DOM Elements
 const canvas = document.getElementById('gameCanvas');
@@ -133,6 +135,14 @@ canvas.addEventListener('mousemove', (e) => {
     const ex = e.clientX - rect.left;
     const ey = e.clientY - rect.top;
     
+    if (placingClaymore) {
+        let cx = placingClaymore.x * CELL_SIZE + CELL_SIZE/2;
+        let cy = placingClaymore.y * CELL_SIZE + CELL_SIZE/2;
+        placingClaymore.facingAngle = Math.atan2(ey - cy, ex - cx);
+        draw();
+        return;
+    }
+    
     let oldX = hoverX;
     let oldY = hoverY;
     hoverX = Math.floor(ex / CELL_SIZE);
@@ -146,6 +156,7 @@ canvas.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseout', () => {
     if (phase !== 'entrench') return;
     hoverX = -1; hoverY = -1;
+    if (placingClaymore) placingClaymore = null; // Cancel placing if mouse leaves
     draw();
 });
 
@@ -180,10 +191,17 @@ canvas.addEventListener('mousedown', (e) => {
     
     if (selectedTool === 'remove') {
         if (currentCell) {
-            const refund = Math.floor(DEFENSES[currentCell.type].cost * 0.5);
+            let refund = 0;
+            let name = currentCell.type;
+            if (DEFENSES[currentCell.type]) {
+                refund = Math.floor(DEFENSES[currentCell.type].cost * 0.5);
+            } else if (currentCell.type === 'hordeLadder') {
+                name = 'Corpse Bridge';
+            }
             supplies += refund;
             grid[gx][gy] = null;
-            log(`Demolished ${currentCell.type}. Refunded ${refund}.`, "build");
+            let msg = refund > 0 ? `Demolished ${name}. Refunded ${refund}.` : `Cleared ${name}.`;
+            log(msg, "build");
             updateSupplies();
             draw();
         }
@@ -192,14 +210,21 @@ canvas.addEventListener('mousedown', (e) => {
             log("Space already occupied!", "error"); return;
         }
         
-        if (isWater && selectedTool !== 'bridge') {
-            log("You can only build a Bridge on water ponds!", "error"); return;
-        }
-        if (!isWater && selectedTool === 'bridge') {
-            log("Bridges must go over water!", "error"); return;
+        if (isWater) {
+            log("You can no longer build on water!", "error"); return;
         }
         
         const def = DEFENSES[selectedTool];
+        
+        if (selectedTool === 'claymore') {
+            if (supplies >= def.cost) {
+                placingClaymore = { x: gx, y: gy, def: def, facingAngle: 0 };
+            } else {
+                log("Not enough supplies!", "error");
+            }
+            return;
+        }
+        
         if (supplies >= def.cost) {
             supplies -= def.cost;
             grid[gx][gy] = {
@@ -217,6 +242,31 @@ canvas.addEventListener('mousedown', (e) => {
         } else {
             log("Not enough supplies!", "error");
         }
+    }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+    if (phase !== 'entrench') return;
+    if (placingClaymore) {
+        supplies -= placingClaymore.def.cost;
+        let gx = placingClaymore.x;
+        let gy = placingClaymore.y;
+        
+        let triggerCells = getClaymoreTriggerCells(gx, gy, placingClaymore.facingAngle, placingClaymore.def.range);
+
+        grid[gx][gy] = {
+            type: 'claymore',
+            hp: placingClaymore.def.hp,
+            facingAngle: placingClaymore.facingAngle,
+            triggerCells: triggerCells,
+            triggerCount: 0,
+            x: gx,
+            y: gy
+        };
+        log(`Constructed claymore at [${gx},${gy}]`, "build");
+        updateSupplies();
+        placingClaymore = null;
+        draw();
     }
 });
 
@@ -346,6 +396,47 @@ nextWaveBtn.addEventListener('click', () => {
 restartBtn.addEventListener('click', () => location.reload());
 
 // --- GAME LOGIC ---
+
+function getClaymoreTriggerCells(gx, gy, angle, range) {
+    let cells = new Set();
+    let cx = gx * CELL_SIZE + CELL_SIZE/2;
+    let cy = gy * CELL_SIZE + CELL_SIZE/2;
+    // Fan is +/- 20 degrees (~0.35 rads)
+    let spread = 0.35;
+    
+    for(let a = angle - spread; a <= angle + spread; a += 0.05) {
+        let maxDist = range;
+        let steps = 20;
+        let lastValidGridX = -1;
+        let lastValidGridY = -1;
+        
+        for(let i=1; i<=steps; i++) {
+            let chkX = cx + (Math.cos(a) * range) * (i/steps);
+            let chkY = cy + (Math.sin(a) * range) * (i/steps);
+            let tx = Math.floor(chkX / CELL_SIZE);
+            let ty = Math.floor(chkY / CELL_SIZE);
+            
+            if (tx >= 0 && tx < COLS && ty >= 0 && ty < ROWS) {
+                let cellT = terrain[tx][ty];
+                if (cellT === 2 || cellT === 3) break; // block
+                lastValidGridX = tx;
+                lastValidGridY = ty;
+            } else {
+                break;
+            }
+        }
+        if (lastValidGridX !== -1 && (lastValidGridX !== gx || lastValidGridY !== gy)) {
+            cells.add(lastValidGridX + ',' + lastValidGridY);
+        }
+    }
+    
+    let result = [];
+    cells.forEach(c => {
+        let parts = c.split(',');
+        result.push({x: parseInt(parts[0]), y: parseInt(parts[1])});
+    });
+    return result;
+}
 
 function hasLOS(x0, y0, x1, y1) {
     let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
@@ -542,11 +633,78 @@ function update() {
     
     if (spawnedHorde < maxHorde && spawnTicks % spawnInterval === 0) spawnHorde();
     
-    // --- TOWERS (Maxims) ---
+    // --- TOWERS & DEFENSES ---
     for (let x = 0; x < COLS; x++) {
         for (let y = 0; y < ROWS; y++) {
             let cell = grid[x][y];
-            if (cell && cell.type === 'maxim') {
+            if (!cell) continue;
+
+            if (cell.type === 'claymore') {
+                if (!cell.recentPasses) cell.recentPasses = new Map();
+                
+                let isSmoked = false;
+                for (let tc of cell.triggerCells) {
+                    if (smokeMap[tc.x][tc.y] > 0) { isSmoked = true; break; }
+                }
+                
+                let inZoneThisFrame = new Set();
+                for (let h of horde) {
+                    let hx = Math.floor((h.x + 10) / CELL_SIZE);
+                    let hy = Math.floor((h.y + 10) / CELL_SIZE);
+                    for (let tc of cell.triggerCells) {
+                        if (tc.x === hx && tc.y === hy) {
+                            inZoneThisFrame.add(h); break;
+                        }
+                    }
+                }
+                
+                for (let h of inZoneThisFrame) {
+                    if (!cell.recentPasses.has(h)) cell.recentPasses.set(h, 90); // 1.5 seconds mem
+                }
+                
+                let activePassers = 0;
+                for (let [h, time] of cell.recentPasses.entries()) {
+                    if (time <= 0 || !horde.includes(h)) {
+                        cell.recentPasses.delete(h);
+                    } else {
+                        cell.recentPasses.set(h, time - 1);
+                        activePassers++;
+                    }
+                }
+                
+                if (isSmoked && activePassers >= 2) {
+                    let cx = x * CELL_SIZE + CELL_SIZE/2;
+                    let cy = y * CELL_SIZE + CELL_SIZE/2;
+                    
+                    log("💥 CLAYMORE DETONATED in the smoke! Sector scrubbed!", "kill");
+                    createParticles(cx, cy, 'orange', 150);
+                    createParticles(cx, cy, 'black', 50);
+                    
+                    for (let i = horde.length - 1; i >= 0; i--) {
+                        let h = horde[i];
+                        let dx = (h.x + 10) - cx;
+                        let dy = (h.y + 10) - cy;
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        
+                        if (dist <= DEFENSES.claymore.range) {
+                            let angle = Math.atan2(dy, dx);
+                            let diff = angle - cell.facingAngle;
+                            while (diff > Math.PI) diff -= Math.PI * 2;
+                            while (diff < -Math.PI) diff += Math.PI * 2;
+                            
+                            if (Math.abs(diff) <= 0.4) {
+                                h.hp -= 500;
+                                createParticles(h.x, h.y, 'red', 10);
+                                if (h.hp <= 0) {
+                                    horde.splice(i, 1); supplies++; totalKills++;
+                                    if (totalKills % 10 === 0) log(`Kills: ${totalKills}`, 'kill');
+                                }
+                            }
+                        }
+                    }
+                    grid[x][y] = null;
+                }
+            } else if (cell.type === 'maxim') {
                 let mx = x * CELL_SIZE + 20;
                 let my = y * CELL_SIZE + 20;
                 
@@ -1069,6 +1227,21 @@ function draw() {
                     ctx.fillStyle = 'yellow';
                     ctx.fillRect(10, -2, 10, 4); // Barrel
                     ctx.restore();
+                } else if (cell.type === 'claymore') {
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.fillText(bSym, px + CELL_SIZE/2, py + CELL_SIZE/2);
+                    
+                    ctx.save();
+                    ctx.translate(px + CELL_SIZE/2, py + CELL_SIZE/2);
+                    ctx.rotate(cell.facingAngle);
+                    ctx.fillStyle = 'rgba(255, 100, 0, 0.4)';
+                    ctx.fillRect(8, -8, 8, 16); 
+                    ctx.restore();
+                    
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+                    for (let c of cell.triggerCells || []) {
+                        ctx.fillRect(c.x * CELL_SIZE, c.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    }
                 } else {
                     ctx.fillStyle = 'rgba(255,255,255,0.8)';
                     ctx.fillText(bSym, px + CELL_SIZE/2, py + CELL_SIZE/2);
@@ -1105,6 +1278,29 @@ function draw() {
              
              ctx.strokeStyle = 'rgba(255,255,255,0.5)';
              ctx.strokeRect(hoverX*CELL_SIZE, hoverY*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+         }
+         
+         if (placingClaymore) {
+             let tc = getClaymoreTriggerCells(placingClaymore.x, placingClaymore.y, placingClaymore.facingAngle, placingClaymore.def.range);
+             let cx = placingClaymore.x * CELL_SIZE + CELL_SIZE/2;
+             let cy = placingClaymore.y * CELL_SIZE + CELL_SIZE/2;
+             
+             // Draw the fan
+             ctx.fillStyle = 'rgba(255, 100, 0, 0.2)';
+             ctx.beginPath();
+             ctx.moveTo(cx, cy);
+             ctx.arc(cx, cy, placingClaymore.def.range, placingClaymore.facingAngle - 0.35, placingClaymore.facingAngle + 0.35);
+             ctx.lineTo(cx, cy);
+             ctx.fill();
+             
+             // Draw trigger cells
+             ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+             for(let c of tc) {
+                 ctx.fillRect(c.x * CELL_SIZE, c.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+             }
+             
+             ctx.fillStyle = placingClaymore.def.color;
+             ctx.fillRect(placingClaymore.x * CELL_SIZE + 2, placingClaymore.y * CELL_SIZE + 2, CELL_SIZE-4, CELL_SIZE-4);
          }
     }
     
