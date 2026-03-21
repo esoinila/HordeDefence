@@ -735,7 +735,7 @@ function spawnHorde() {
             x: sx, y: sy, hp: 30, speed: 1.0 + Math.random() * 1.5,
             slipTime: 0, slipDirX: 0, slipDirY: 0, spin: 0, frame: 0,
             wigglePhase: Math.random() * Math.PI * 2,
-            type: 'grunt'
+            type: 'grunt', squad: Math.random() > 0.5 ? 'A' : 'B'
         });
     }
     spawnedHorde++;
@@ -1009,9 +1009,31 @@ function update() {
     }
     
     // --- HORDE MOVEMENT ---
+    let fleeMode = (horde.length <= 4 && horde.some(h => h.type === 'brain')) && (spawnedHorde >= maxHorde);
+    
     for (let i = horde.length - 1; i >= 0; i--) {
         let h = horde[i];
         h.frame++;
+        
+        if (fleeMode) {
+            // Flee away from center!
+            if (h.x + 10 < 0 || h.x > CANVAS_W || h.y + 10 < 0 || h.y > CANVAS_H) {
+                horde.splice(i, 1);
+                continue;
+            }
+            let cx_pos = (COLS/2) * CELL_SIZE; let cy_pos = (ROWS/2) * CELL_SIZE;
+            let dx = (h.x + 10) - cx_pos; let dy = (h.y + 10) - cy_pos;
+            let len = Math.sqrt(dx*dx + dy*dy);
+            if (len > 0) {
+                h.x += (dx/len) * 3.0; h.y += (dy/len) * 3.0;
+            }
+            
+            if (h.type === 'brain' && h.frame % 30 === 0) {
+                createParticles(h.x+10, h.y+10, 'gray', 5);
+                if (h.frame % 120 === 0) log("The BRAIN is fleeing! Victory is near...", "wave");
+            }
+            continue; // Submits to no other game mechanics
+        }
         
         let cx = Math.floor((h.x + 10) / CELL_SIZE);
         let cy = Math.floor((h.y + 10) / CELL_SIZE);
@@ -1023,11 +1045,6 @@ function update() {
             
             let brainDist = (flowField && flowField[cx] && flowField[cx][cy] !== undefined) ? flowField[cx][cy] : 999999;
             let isOnBoard = (cx > 0 && cx < COLS-1 && cy > 0 && cy < ROWS-1);
-            
-            if (brainDist < 500 && h.breachTarget) {
-                h.breachTarget = null;
-                log("The way is open! The BRAIN commands a full charge!", "error");
-            }
             
             if (h.frame - (h.lastCommandTick || 0) > 120) {
                 h.lastCommandTick = h.frame;
@@ -1045,7 +1062,7 @@ function update() {
                     }
                 }
                 
-                if (!targetStillExists && brainDist >= 500 && isOnBoard) {
+                if (!targetStillExists && isOnBoard) {
                     let minDanger = 999999;
                     let weakPoints = [];
                     for (let xx=0; xx<COLS; xx++) {
@@ -1081,9 +1098,9 @@ function update() {
                     currentBreachFlowField = getFlowField(bx, by);
                     
                     for (let oh of horde) {
-                        if (oh.type !== 'brain') {
-                            oh.breaching = 120; // Surge towards weak point using the breach flow field
-                            oh.aggroTicks = 0;  // clear standard aggro override
+                        if (oh.type !== 'brain' && oh.squad === 'B') {
+                            oh.breaching = 120; // Squad B flanks toward weak point, Squad A holds main
+                            oh.aggroTicks = 0;
                         }
                     }
                 }
