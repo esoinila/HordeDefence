@@ -19,38 +19,34 @@
                     <hr class="bg-secondary" />
                     
                     <h5>Build Defenses</h5>
-                    <div class="d-grid gap-2 build-menu">
-                        <button class="btn btn-outline-secondary text-start build-btn active" data-type="trench" data-cost="20">
-                            🟫 Trench (20) <small class="d-block text-muted">Blocks path, bullets fly over</small>
-                        </button>
-                        <button class="btn btn-outline-secondary text-start build-btn" data-type="wire" data-cost="30">
-                            ➰ Barbed Wire (30) <small class="d-block text-muted">Slows horde</small>
-                        </button>
-                        <button class="btn btn-outline-secondary text-start build-btn" data-type="maxim" data-cost="150">
-                            🔫 Maxim Gun (150) <small class="d-block text-muted">Sprays piercing bullets</small>
-                        </button>
-                        <button class="btn btn-outline-secondary text-start build-btn" data-type="moat" data-cost="80">
-                            🐊 Croc Moat (80) <small class="d-block text-muted">Eats 5 horders</small>
-                        </button>
-                        <button class="btn btn-outline-secondary text-start build-btn" data-type="oil" data-cost="30">
-                            🛢️ Oil Slick (30) <small class="d-block text-muted">Makes 'em slip & spin</small>
-                        </button>
-                        <button class="btn btn-outline-secondary text-start build-btn" data-type="claymore" data-cost="60">
-                            💥 Claymore (60) <small class="d-block text-muted">Aimed explosive. Triggers on mass movement + smoke</small>
-                        </button>
-                        <button class="btn btn-outline-danger text-start build-btn" data-type="remove" data-cost="0">
-                            🗑️ Demolish <small class="d-block text-muted">Refunds 50%</small>
-                        </button>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn active" data-type="trench" data-cost="20" title="Blocks path, bullets fly over">🟫 Trench (20)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="wire" data-cost="30" title="Slows horde">➰ Wire (30)</button></div>
+                        <div class="col-12"><button class="btn btn-outline-secondary w-100 build-btn text-start" data-type="maxim" data-cost="150" title="Sprays piercing bullets">🔫 Maxim Gun (150)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="moat" data-cost="80" title="Eats 5 horde">🐊 Moat (80)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="oil" data-cost="30" title="Makes 'em slip & spin">🛢️ Oil (30)</button></div>
+                        <div class="col-12"><button class="btn btn-outline-secondary w-100 build-btn text-start" data-type="claymore" data-cost="60" title="Aimed explosive. Triggers on mass movement + smoke">💥 Claymore (60)</button></div>
+                        <div class="col-12"><button class="btn btn-outline-danger w-100 build-btn text-start" data-type="remove" data-cost="0" title="Demolish or clear corpse bridges">🗑️ Demolish (Refunds 50%)</button></div>
                     </div>
 
-                    <hr class="bg-secondary" />
+                    <hr class="bg-secondary mb-2" />
                     <button id="rerollBtn" class="btn btn-outline-info btn-sm w-100 mb-2">🎲 Reroll Terrain</button>
-                    <button id="startWaveBtn" class="btn btn-danger btn-lg w-100 fw-bold">🚀 LAUNCH HORDE</button>
-                    <button id="replayBtn" class="btn btn-info btn-sm w-100 mt-2" style="display:none;">🔄 Replay Wave (Same Horde)</button>
-                    <button id="replayEntrenchBtn" class="btn btn-outline-info btn-sm w-100 mt-2" style="display:none;">🏗️ Replay Wave (Use Current Supplies)</button>
-                    <button id="tryAgainBtn" class="btn btn-success btn-sm w-100 mt-2" style="display:none;">🛠️ Modify Defenses (+200 Supplies)</button>
-                    <button id="nextWaveBtn" class="btn btn-primary btn-sm w-100 mt-2" style="display:none;">🌊 Next Wave (x1.5 Horde)</button>
-                    <button id="restartBtn" class="btn btn-warning btn-sm w-100 mt-2" style="display:none;">🗺️ New Map / Restart</button>
+                    <button id="startWaveBtn" class="btn btn-danger btn-lg w-100 fw-bold mb-2">🚀 LAUNCH HORDE</button>
+                    
+                    <div class="row g-1">
+                        <div class="col-6"><button id="replayBtn" class="btn btn-info btn-sm w-100 h-100" style="display:none;" title="Replay same wave size from scratch">🔄 Replay(Same)</button></div>
+                        <div class="col-6"><button id="replayEntrenchBtn" class="btn btn-outline-info btn-sm w-100 h-100" style="display:none;" title="Keep current defenses and replay same wave size">🏗️ Replay(Supplies)</button></div>
+                        <div class="col-6"><button id="tryAgainBtn" class="btn btn-success btn-sm w-100 h-100 mt-1" style="display:none;" title="Rebuild and try again">🛠️ Modify (+200)</button></div>
+                        <div class="col-6"><button id="nextWaveBtn" class="btn btn-primary btn-sm w-100 h-100 mt-1" style="display:none;">🌊 Next (x1.5)</button></div>
+                        <div class="col-12"><button id="restartBtn" class="btn btn-warning btn-sm w-100 mt-1" style="display:none;">🗺️ New Map / Restart</button></div>
+                    </div>
+                    
+                    <hr class="bg-secondary mt-2 mb-2" />
+                    <div class="row g-1">
+                        <div class="col-6"><button id="exportBtn" class="btn btn-outline-light btn-sm w-100">📤 Export</button></div>
+                        <div class="col-6"><button id="importBtn" class="btn btn-outline-light btn-sm w-100">📥 Import</button></div>
+                    </div>
+                    <input type="file" id="importFile" accept=".json" style="display:none;" />
                 </div>
             </div>
             <div class="alert alert-info small text-start">

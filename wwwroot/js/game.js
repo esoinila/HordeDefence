@@ -56,6 +56,9 @@ const replayEntrenchBtn = document.getElementById('replayEntrenchBtn');
 const tryAgainBtn = document.getElementById('tryAgainBtn');
 const nextWaveBtn = document.getElementById('nextWaveBtn');
 const rerollBtn = document.getElementById('rerollBtn');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
 
 // Map Generation
 function generateTerrain() {
@@ -394,6 +397,107 @@ nextWaveBtn.addEventListener('click', () => {
 });
 
 restartBtn.addEventListener('click', () => location.reload());
+
+if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+        let strippedGrid = [];
+        for (let x = 0; x < COLS; x++) {
+            strippedGrid[x] = [];
+            for (let y = 0; y < ROWS; y++) {
+                let cell = grid[x][y];
+                if (!cell) {
+                    strippedGrid[x][y] = null;
+                } else {
+                    let copy = Object.assign({}, cell);
+                    if (copy.type === 'claymore') {
+                        // Strip runtime Map
+                        delete copy.recentPasses;
+                    }
+                    strippedGrid[x][y] = copy;
+                }
+            }
+        }
+        
+        let scenario = {
+            terrain: terrain,
+            grid: strippedGrid,
+            supplies: supplies,
+            maxHorde: maxHorde
+        };
+        
+        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(scenario));
+        let dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", "horde_scenario.json");
+        dlAnchorElem.click();
+        log("Scenario exported!", "build");
+    });
+}
+
+if (importBtn) {
+    importBtn.addEventListener('click', () => importFile.click());
+    
+    importFile.addEventListener('change', (e) => {
+        let file = e.target.files[0];
+        if (!file) return;
+        
+        let reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                let data = JSON.parse(evt.target.result);
+                if (data.terrain && data.grid && data.supplies !== undefined && data.maxHorde) {
+                    terrain = data.terrain;
+                    supplies = data.supplies;
+                    maxHorde = data.maxHorde;
+                    
+                    grid = [];
+                    for (let x = 0; x < COLS; x++) {
+                        grid[x] = [];
+                        for (let y = 0; y < ROWS; y++) {
+                            let cell = data.grid[x][y];
+                            if (!cell) {
+                                grid[x][y] = null;
+                            } else {
+                                grid[x][y] = cell;
+                                if (cell.type === 'claymore') {
+                                    cell.recentPasses = new Map();
+                                    cell.triggerCells = getClaymoreTriggerCells(x, y, cell.facingAngle, DEFENSES.claymore.range);
+                                }
+                            }
+                        }
+                    }
+                    
+                    phase = 'entrench';
+                    phaseDisplay.innerText = "ENTRENCHMENT PHASE";
+                    phaseDisplay.className = "text-primary font-weight-bold";
+                    
+                    startBtn.style.display = 'block';
+                    rerollBtn.style.display = 'block';
+                    buildBtns.forEach(b => b.disabled = false);
+                    
+                    horde = []; bullets = []; particles = [];
+                    spawnedHorde = 0; gameOver = false; victory = false; castleExplosion = 0; spawnTicks = 0;
+                    
+                    if (replayBtn) replayBtn.style.display = 'none';
+                    if (replayEntrenchBtn) replayEntrenchBtn.style.display = 'none';
+                    if (tryAgainBtn) tryAgainBtn.style.display = 'none';
+                    if (nextWaveBtn) nextWaveBtn.style.display = 'none';
+                    if (restartBtn) restartBtn.style.display = 'none';
+                    
+                    log("Scenario successfully imported! Prepare your defenses.", "build");
+                    updateSupplies();
+                    draw();
+                } else {
+                    log("Invalid scenario file format.", "error");
+                }
+            } catch(err) {
+                log("Error reading scenario file.", "error");
+            }
+            importFile.value = ''; 
+        };
+        reader.readAsText(file);
+    });
+}
 
 // --- GAME LOGIC ---
 
