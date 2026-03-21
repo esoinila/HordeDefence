@@ -1058,17 +1058,25 @@ function update() {
                         targetStillExists = true;
                     } else {
                         h.breachTarget = null;
-                        log("Breach target destroyed! The BRAIN is scanning...", "wave");
+                        h.breachCooldown = 900; // HUGE Cooldown so the horde can actually rush the new hole!
+                        log("Breach target destroyed! The BRAIN allows the horde to flood in!", "wave");
                     }
                 }
                 
-                if (!targetStillExists && isOnBoard) {
+                if (h.breachCooldown && h.breachCooldown > 0) h.breachCooldown -= 120;
+                
+                if (!targetStillExists && isOnBoard && (!h.breachCooldown || h.breachCooldown <= 0)) {
                     let minDanger = 999999;
                     let weakPoints = [];
                     for (let xx=0; xx<COLS; xx++) {
                         for (let yy=0; yy<ROWS; yy++) {
                             let cellObj = grid[xx][yy];
-                            if (cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'generator' || cellObj.type === 'decoy')) {
+                            let cellTerrain = terrain[xx][yy];
+                            
+                            let isDef = cellObj && (cellObj.type === 'wire' || cellObj.type === 'trench' || cellObj.type === 'generator' || cellObj.type === 'decoy' || cellObj.type === 'moat');
+                            let isWater = cellTerrain === 1 && (!cellObj || (cellObj.type !== 'bridge' && cellObj.type !== 'hordeLadder'));
+                            
+                            if (isDef || isWater) {
                                 let danger = currentDangerMap ? currentDangerMap[xx][yy] : 0;
                                 if (danger < minDanger) {
                                     minDanger = danger;
@@ -1080,14 +1088,20 @@ function update() {
                         }
                     }
                     if (weakPoints.length > 0) {
-                        let wp = weakPoints[Math.floor(Math.random() * weakPoints.length)];
+                        // Optimize! Pick the weak point nearest to the Keep (lowest flowField distance)
+                        weakPoints.sort((a,b) => {
+                             let da = flowField ? flowField[a.x][a.y] : 0;
+                             let db = flowField ? flowField[b.x][b.y] : 0;
+                             return da - db;
+                        });
+                        let wp = weakPoints[0]; // Nearest weak point
                         let dcx = wp.x * CELL_SIZE + CELL_SIZE/2;
                         let dcy = wp.y * CELL_SIZE + CELL_SIZE/2;
                         
                         h.breachTarget = {x: dcx, y: dcy};
                         h.lightbulbTicks = 60;
                         createParticles(h.x+10, h.y+10, 'yellow', 15);
-                        log("The BRAIN identified a blind spot! The horde is changing direction!", "error");
+                        log("The BRAIN identified a blind spot! Squad B is flanking!", "error");
                     }
                 }
                 
@@ -1099,8 +1113,15 @@ function update() {
                     
                     for (let oh of horde) {
                         if (oh.type !== 'brain' && oh.squad === 'B') {
-                            oh.breaching = 120; // Squad B flanks toward weak point, Squad A holds main
-                            oh.aggroTicks = 0;
+                            let ocx = Math.floor((oh.x+10)/CELL_SIZE);
+                            let ocy = Math.floor((oh.y+10)/CELL_SIZE);
+                            let distToKeep = (flowField && flowField[ocx] && flowField[ocx][ocy] !== undefined) ? flowField[ocx][ocy] : 9999;
+                            
+                            // Only flank if they aren't already deep inside the castle defenses!
+                            if (distToKeep > 15) {
+                                oh.breaching = 120; // Squad B flanks toward weak point
+                                oh.aggroTicks = 0;
+                            }
                         }
                     }
                 }
@@ -1140,8 +1161,8 @@ function update() {
         
         // Smoke Tactics! If Horde member is in High Danger LOS but no smoke exists here
         if (h.type !== 'brain' && currentDangerMap && currentDangerMap[cx][cy] > 0 && smokeMap[cx][cy] <= 0) {
-            // Very high chance per second (0.02/frame = 120%/sec) to pop smoke and sacrifice
-            if (Math.random() < 0.02) {
+            // Drop deployment chance down to 0.005/frame (30% per second per unit, scales with mass)
+            if (Math.random() < 0.005) {
                 smokeMap[cx][cy] = 100; // About 1.6 seconds of thick cover!
                 createParticles(h.x + 10, h.y + 10, 'gray', 40);
                 log("A frontline horde member sacrificed themselves to throw a Smoke Screen!", "wave");
