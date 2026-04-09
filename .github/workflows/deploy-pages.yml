@@ -3,7 +3,7 @@ name: Deploy playtest to GitHub Pages
 on:
   push:
     branches:
-      - '**'
+      - 'copilot/deploy-github-pages-for-playtesting'
   workflow_dispatch:
 
 permissions:
