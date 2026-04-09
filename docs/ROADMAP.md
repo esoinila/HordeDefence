@@ -8,27 +8,22 @@
 
 The game runs as an **ASP.NET Core (.NET 10)** web application. The server does nothing beyond serving static files. All game logic is in [`wwwroot/js/game.js`](../wwwroot/js/game.js).
 
+A standalone **`index.html`** also lives at the repo root, making the game playable directly from GitHub Pages with no server required.
+
 ---
 
-## Phase 1 — GitHub Pages Migration (Static Frontend)
+## Phase 1 — GitHub Pages Migration (Static Frontend) ✅
 
-**Goal**: Make the game hostable for free on GitHub Pages so it can be shared without any server infrastructure.
+**Status**: Implemented.
 
-### What needs to change
+A self-contained [`index.html`](../index.html) at the repo root combines the layout and game page into a single static file with relative paths to `wwwroot/css/site.css` and `wwwroot/js/game.js`. No build step or server is required.
 
-The current HTML entry point is a Razor Page (`Pages/Index.cshtml`) rendered by ASP.NET Core. To host on GitHub Pages, the game needs to be a plain static HTML file.
+A GitHub Actions workflow ([`.github/workflows/pages.yml`](../.github/workflows/pages.yml)) automatically deploys to GitHub Pages on every push to `main`. The workflow:
+1. Checks out the repo
+2. Copies `index.html`, `wwwroot/css/`, `wwwroot/js/`, and `favicon.ico` into a clean `_site/` staging directory
+3. Uploads and deploys to the `github-pages` environment
 
-**Steps**:
-1. Create a `gh-pages` branch (or configure GitHub Pages to serve from `docs/` or a dedicated `static/` folder on `main`).
-2. Extract the game HTML from `Pages/Index.cshtml` into a standalone `index.html` file, replacing Razor-specific syntax (e.g. `asp-append-version`, `@section Scripts`) with plain HTML equivalents.
-3. Copy all assets from `wwwroot/` into the same folder as `index.html` (or adjust relative paths).
-4. Add a GitHub Actions workflow that automatically builds and publishes to GitHub Pages on every push to `main`.
-
-### What stays the same
-
-- `wwwroot/js/game.js` — the entire game engine, unchanged
-- `wwwroot/css/site.css` — styling, unchanged
-- Bootstrap is already loaded from CDN, so no bundling needed
+**To enable hosting**: go to the repository **Settings → Pages**, set the source to **GitHub Actions**.
 
 ### Result
 
@@ -36,35 +31,29 @@ Anyone can play the game at `https://<username>.github.io/HordeDefence/` with no
 
 ---
 
-## Phase 2 — Local Highscores with Checksum
+## Phase 2 — Local Highscores with Checksum ✅
 
-**Goal**: Give players a lightweight score-tracking system that lives on their own machine, without requiring a server.
+**Status**: Implemented.
 
-### Design
-
-Scores are saved as a **JSON file** in the browser using the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) or `localStorage` as a fallback.
-
-Each score entry contains:
+Scores are saved to **`localStorage`** under the key `hordeDefenceScores` at the end of every wave (win or loss). Each entry contains:
 
 ```json
 {
-  "wave": 5,
-  "maxHorde": 202,
-  "kills": 202,
-  "supplies": 1437,
-  "timestamp": "2026-04-09T17:00:00Z",
+  "victory": true,
+  "maxHorde": 60,
+  "kills": 60,
+  "suppliesLeft": 812,
+  "timestamp": "2026-04-09T17:00:00.000Z",
   "checksum": "a3f9..."
 }
 ```
 
-The **checksum** is a hash (e.g. SHA-256) computed from the score fields and a fixed application secret embedded in the game's JavaScript. This is not cryptographically strong security — anyone who reads the source code can compute a valid checksum — but it deters **lazy cheating** (manually editing the JSON file without knowing the algorithm).
+The **checksum** is a SHA-256 hash (via `crypto.subtle.digest`) of the score fields plus a fixed application token embedded in `game.js`. This deters lazy manual editing of the JSON in DevTools without knowing the algorithm.
+
+A **🏆 Highscores** panel in the sidebar shows the top 10 scores, sorted by victories first, then wave difficulty (`maxHorde`), then kills. An **Export 📤** button saves scores as a `horde-defence-scores.json` file that can be shared alongside a scenario export.
 
 Since players own the code, the social contract is:
 > *"You can cheat if you want to — but why would you? The fun is in the design, not the score."*
-
-### Export / Import
-
-The existing Export/Import feature (already in the game for scenarios) can be extended to cover highscores. Players can share their score files as proof-of-run alongside their scenario JSON.
 
 ---
 
