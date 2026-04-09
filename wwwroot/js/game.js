@@ -1822,6 +1822,13 @@ const SCORE_STORAGE_KEY = 'hordeDefenceScores';
 const SCORE_SECRET = 'horde-defence-v1'; // embedded in plain sight, intentionally
 
 async function computeScoreChecksum(entry) {
+    if (typeof entry.victory !== 'boolean' ||
+        !Number.isFinite(entry.maxHorde) ||
+        !Number.isFinite(entry.kills) ||
+        !Number.isFinite(entry.suppliesLeft) ||
+        typeof entry.timestamp !== 'string') {
+        throw new Error('Invalid score entry fields');
+    }
     const payload = JSON.stringify({
         victory: entry.victory,
         maxHorde: entry.maxHorde,
@@ -1845,12 +1852,16 @@ function renderHighscores(scores) {
         el.innerHTML = '<em class="text-secondary">No scores yet — launch a wave!</em>';
         return;
     }
-    const rows = scores.slice(0, 10).map((s, i) => {
+    el.innerHTML = '';
+    scores.slice(0, 10).forEach((s, i) => {
+        const row = document.createElement('div');
+        row.className = s.victory ? 'text-success' : 'text-danger';
         const icon = s.victory ? '🏆' : '💀';
         const date = new Date(s.timestamp).toLocaleDateString();
-        return `<div class="${s.victory ? 'text-success' : 'text-danger'}">${icon} #${i+1} &nbsp;Wave:${s.maxHorde} &nbsp;Kills:${s.kills} &nbsp;Sup:${s.suppliesLeft} <span class="text-secondary">${date}</span></div>`;
+        // Use textContent for all interpolated values to prevent XSS
+        row.textContent = `${icon} #${i + 1}  Wave:${Number(s.maxHorde)}  Kills:${Number(s.kills)}  Sup:${Number(s.suppliesLeft)}  ${date}`;
+        el.appendChild(row);
     });
-    el.innerHTML = rows.join('');
 }
 
 async function saveHighscore(isVictory) {
@@ -1882,10 +1893,12 @@ if (exportScoresBtn) {
         const scores = loadHighscores();
         const blob = new Blob([JSON.stringify(scores, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(blob);
+        a.href = url;
         a.download = 'horde-defence-scores.json';
         a.click();
-        URL.revokeObjectURL(a.href);
+        // Delay revocation so the browser has time to start the download
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
     });
 }
 
