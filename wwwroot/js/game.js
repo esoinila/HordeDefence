@@ -1191,7 +1191,8 @@ function update() {
         
         if (cellTerrain === 3) {
             explodeCastle();
-            gameOver = true; 
+            gameOver = true;
+            saveHighscore(false);
             replayBtn.style.display = 'block';
             tryAgainBtn.style.display = 'block';
             restartBtn.style.display = 'block';
@@ -1449,7 +1450,8 @@ function update() {
     
     if (spawnedHorde >= maxHorde && horde.length === 0) {
         gameOver = true; victory = true;
-        log("WAVE DEFEATED! THE CASTLE STANDS!", "wave"); 
+        log("WAVE DEFEATED! THE CASTLE STANDS!", "wave");
+        saveHighscore(true);
         if (replayBtn) replayBtn.style.display = 'block';
         if (replayEntrenchBtn) replayEntrenchBtn.style.display = 'block';
         if (nextWaveBtn) nextWaveBtn.style.display = 'block';
@@ -1809,5 +1811,99 @@ function gameLoop() {
         requestAnimationFrame(gameLoop);
     }
 }
+
+// ── Highscore system ──────────────────────────────────────────────────────────
+// Scores are persisted to localStorage as JSON. Each entry is protected by a
+// SHA-256 checksum to deter casual manual editing. Since the game is open
+// source, this is not cryptographic security — just a speed bump for lazy
+// cheaters. The spirit of the game is creative fun, not competitive integrity.
+
+const SCORE_STORAGE_KEY = 'hordeDefenceScores';
+const SCORE_SECRET = 'horde-defence-v1'; // embedded in plain sight, intentionally
+
+async function computeScoreChecksum(entry) {
+    if (typeof entry.victory !== 'boolean' ||
+        !Number.isFinite(entry.maxHorde) ||
+        !Number.isFinite(entry.kills) ||
+        !Number.isFinite(entry.suppliesLeft) ||
+        typeof entry.timestamp !== 'string') {
+        throw new Error('Invalid score entry fields');
+    }
+    const payload = JSON.stringify({
+        victory: entry.victory,
+        maxHorde: entry.maxHorde,
+        kills: entry.kills,
+        suppliesLeft: entry.suppliesLeft,
+        timestamp: entry.timestamp
+    }) + SCORE_SECRET;
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function loadHighscores() {
+    try { return JSON.parse(localStorage.getItem(SCORE_STORAGE_KEY) || '[]'); }
+    catch { return []; }
+}
+
+function renderHighscores(scores) {
+    const el = document.getElementById('highscoreList');
+    if (!el) return;
+    if (!scores || scores.length === 0) {
+        el.innerHTML = '<em class="text-secondary">No scores yet — launch a wave!</em>';
+        return;
+    }
+    el.innerHTML = '';
+    scores.slice(0, 10).forEach((s, i) => {
+        const row = document.createElement('div');
+        row.className = s.victory ? 'text-success' : 'text-danger';
+        const icon = s.victory ? '🏆' : '💀';
+        const date = new Date(s.timestamp).toLocaleDateString();
+        // Use textContent for all interpolated values to prevent XSS
+        row.textContent = `${icon} #${i + 1}  Wave:${Number(s.maxHorde)}  Kills:${Number(s.kills)}  Sup:${Number(s.suppliesLeft)}  ${date}`;
+        el.appendChild(row);
+    });
+}
+
+async function saveHighscore(isVictory) {
+    const entry = {
+        victory: isVictory,
+        maxHorde,
+        kills: totalKills,
+        suppliesLeft: supplies,
+        timestamp: new Date().toISOString()
+    };
+    entry.checksum = await computeScoreChecksum(entry);
+    const scores = loadHighscores();
+    scores.push(entry);
+    // Sort: victories first, then by maxHorde (wave difficulty), then by kills
+    scores.sort((a, b) => {
+        if (a.victory !== b.victory) return b.victory - a.victory;
+        if (b.maxHorde !== a.maxHorde) return b.maxHorde - a.maxHorde;
+        return b.kills - a.kills;
+    });
+    scores.splice(10); // keep top 10
+    localStorage.setItem(SCORE_STORAGE_KEY, JSON.stringify(scores));
+    renderHighscores(scores);
+}
+
+// Export scores button
+const exportScoresBtn = document.getElementById('exportScoresBtn');
+if (exportScoresBtn) {
+    exportScoresBtn.addEventListener('click', () => {
+        const scores = loadHighscores();
+        const blob = new Blob([JSON.stringify(scores, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = 'horde-defence-scores.json';
+        a.click();
+        // Delay revocation so the browser has time to start the download
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+}
+
+// Render any existing scores on load
+renderHighscores(loadHighscores());
+// ─────────────────────────────────────────────────────────────────────────────
 
 draw();
