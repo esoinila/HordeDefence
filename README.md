@@ -45,6 +45,8 @@ The game is currently served as an **ASP.NET Core (.NET 10) Razor Pages** applic
 |---|---|
 | [Vision & Philosophy](docs/VISION.md) | Why the game was built, the calm auto-play concept, and AI-assisted development |
 | [Roadmap](docs/ROADMAP.md) | Planned migration to GitHub Pages, open-source hosting, and local highscores |
+| [Contributing](CONTRIBUTING.md) | How to fork, modify, and contribute back |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards for participation |
 
 ---
 
@@ -60,4 +62,8 @@ Then open `https://localhost:5001` (or the port shown in the terminal).
 
 ## 🤝 Contributing
 
-This project is designed to be tinkered with. The entire game lives in one file — [`wwwroot/js/game.js`](wwwroot/js/game.js) — making it easy to extend with AI coding tools. See the [Vision document](docs/VISION.md) for the spirit of how this project is meant to grow.
+This project is designed to be tinkered with. The entire game lives in one file — [`wwwroot/js/game.js`](wwwroot/js/game.js) — making it easy to extend with AI coding tools. See the [Contributing guide](CONTRIBUTING.md) for how to fork, modify, and submit pull requests, and the [Vision document](docs/VISION.md) for the spirit of how this project is meant to grow.
+
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
