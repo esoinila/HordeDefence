@@ -10,69 +10,86 @@
 <body>
     <div class="container mt-4">
         <main role="main" class="pb-3">
-            <div class="game-container text-center">
-                <h1 class="display-4 text-danger mb-3" style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">DEFEND THE CASTLE</h1>
 
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="card bg-dark text-white mb-3">
-                            <div class="card-header">
-                                <h3>Keep HQ</h3>
-                            </div>
-                            <div class="card-body">
-                                <h4 class="text-warning">Supplies: <span id="suppliesDisplay">1000</span></h4>
-                                <p>Phase: <span id="phaseDisplay" class="text-info fw-bold">Entrenchment</span></p>
-                                <hr class="bg-secondary" />
-
-                                <h5>Build Defenses</h5>
-                                <div class="row g-2 mb-3">
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn active" data-type="trench" data-cost="20" title="Blocks path, bullets fly over">🟫 Trench (20)</button></div>
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="wire" data-cost="30" title="Slows horde">➰ Wire (30)</button></div>
-                                    <div class="col-12"><button class="btn btn-outline-secondary w-100 build-btn text-start" data-type="maxim" data-cost="150" title="Sprays piercing bullets">🔫 Maxim Gun (150)</button></div>
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="moat" data-cost="80" title="Eats 5 horde">🐊 Moat (80)</button></div>
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="oil" data-cost="30" title="Makes 'em slip & spin">🛢️ Oil (30)</button></div>
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="generator" data-cost="80" title="Electrifies adjacent wire">⚡ Generator (80)</button></div>
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="decoy" data-cost="150" title="Draws horde attention">🎯 Decoy (150)</button></div>
-                                    <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn text-start" data-type="claymore" data-cost="60" title="Aimed explosive. Triggers on mass movement + smoke">💥 Claymore (60)</button></div>
-                                    <div class="col-12"><button class="btn btn-outline-danger w-100 build-btn text-start" data-type="remove" data-cost="0" title="Demolish or clear corpse bridges">🗑️ Demolish (Refunds 50%)</button></div>
-                                </div>
-
-                                <hr class="bg-secondary mb-2" />
-                                <button id="rerollBtn" class="btn btn-outline-info btn-sm w-100 mb-2">🎲 Reroll Terrain</button>
-                                <button id="startWaveBtn" class="btn btn-danger btn-lg w-100 fw-bold mb-2">🚀 LAUNCH HORDE</button>
-
-                                <div class="row g-1">
-                                    <div class="col-6"><button id="replayBtn" class="btn btn-info btn-sm w-100 h-100" style="display:none;" title="Replay same wave size from scratch">🔄 Replay(Same)</button></div>
-                                    <div class="col-6"><button id="replayEntrenchBtn" class="btn btn-outline-info btn-sm w-100 h-100" style="display:none;" title="Keep current defenses and replay same wave size">🏗️ Replay(Supplies)</button></div>
-                                    <div class="col-6"><button id="tryAgainBtn" class="btn btn-success btn-sm w-100 h-100 mt-1" style="display:none;" title="Rebuild and try again">🛠️ Modify (+200)</button></div>
-                                    <div class="col-6"><button id="nextWaveBtn" class="btn btn-primary btn-sm w-100 h-100 mt-1" style="display:none;">🌊 Next (x1.5)</button></div>
-                                    <div class="col-12"><button id="restartBtn" class="btn btn-warning btn-sm w-100 mt-1" style="display:none;">🗺️ New Map / Restart</button></div>
-                                </div>
-
-                                <hr class="bg-secondary mt-2 mb-2" />
-                                <div class="row g-1">
-                                    <div class="col-6"><button id="exportBtn" class="btn btn-outline-light btn-sm w-100">📤 Export</button></div>
-                                    <div class="col-6"><button id="importBtn" class="btn btn-outline-light btn-sm w-100">📥 Import</button></div>
-                                </div>
-                                <input type="file" id="importFile" accept=".json" style="display:none;" />
-                            </div>
-                        </div>
-                        <div class="alert alert-info small text-start">
-                            <strong>Tip:</strong> The Castle Keep is in the center. The horde spawns from all sides! Channel them using trenches and use Maxims to cover lanes.
-                        </div>
+<div class="game-container text-center">
+    <h1 class="display-4 text-danger mb-3" style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">DEFEND THE CASTLE</h1>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card bg-dark text-white mb-3">
+                <div class="card-header">
+                    <h3>Keep HQ</h3>
+                </div>
+                <div class="card-body">
+                    <h4 class="text-warning">Supplies: <span id="suppliesDisplay">1000</span></h4>
+                    <p>Phase: <span id="phaseDisplay" class="text-info font-weight-bold">Entrenchment</span></p>
+                    <hr class="bg-secondary" />
+                    
+                    <h5>Build Defenses</h5>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn active" data-type="trench" data-cost="20" title="Blocks path, bullets fly over">🟫 Trench (20)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="wire" data-cost="30" title="Slows horde">➰ Wire (30)</button></div>
+                        <div class="col-12"><button class="btn btn-outline-secondary w-100 build-btn text-start" data-type="maxim" data-cost="150" title="Sprays piercing bullets">🔫 Maxim Gun (150)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="moat" data-cost="80" title="Eats 5 horde">🐊 Moat (80)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="oil" data-cost="30" title="Makes 'em slip &amp; spin">🛢️ Oil (30)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="generator" data-cost="80" title="Electrifies adjacent wire">⚡ Generator (80)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn" data-type="decoy" data-cost="150" title="Draws horde attention">🎯 Decoy (150)</button></div>
+                        <div class="col-6"><button class="btn btn-outline-secondary w-100 build-btn text-start" data-type="claymore" data-cost="60" title="Aimed explosive. Triggers on mass movement + smoke">💥 Claymore (60)</button></div>
+                        <div class="col-12"><button class="btn btn-outline-danger w-100 build-btn text-start" data-type="remove" data-cost="0" title="Demolish or clear corpse bridges">🗑️ Demolish (Refunds 50%)</button></div>
                     </div>
 
-                    <div class="col-md-9 mb-4 mx-auto text-center">
-                        <div class="bg-secondary p-2 rounded shadow d-inline-block w-100">
-                            <canvas id="gameCanvas" width="800" height="800" style="max-width: 100%; height: auto;" class="border border-dark shadow-lg bg-dark"></canvas>
-                        </div>
+                    <hr class="bg-secondary mb-2" />
+                    <button id="rerollBtn" class="btn btn-outline-info btn-sm w-100 mb-2">🎲 Reroll Terrain</button>
+                    <button id="startWaveBtn" class="btn btn-danger btn-lg w-100 fw-bold mb-2">🚀 LAUNCH HORDE</button>
+                    
+                    <div class="row g-1">
+                        <div class="col-6"><button id="replayBtn" class="btn btn-info btn-sm w-100 h-100" style="display:none;" title="Replay same wave size from scratch">🔄 Replay(Same)</button></div>
+                        <div class="col-6"><button id="replayEntrenchBtn" class="btn btn-outline-info btn-sm w-100 h-100" style="display:none;" title="Keep current defenses and replay same wave size">🏗️ Replay(Supplies)</button></div>
+                        <div class="col-6"><button id="tryAgainBtn" class="btn btn-success btn-sm w-100 h-100 mt-1" style="display:none;" title="Rebuild and try again">🛠️ Modify (+200)</button></div>
+                        <div class="col-6"><button id="nextWaveBtn" class="btn btn-primary btn-sm w-100 h-100 mt-1" style="display:none;">🌊 Next (x1.5)</button></div>
+                        <div class="col-12"><button id="restartBtn" class="btn btn-warning btn-sm w-100 mt-1" style="display:none;">🗺️ New Map / Restart</button></div>
+                    </div>
+                    
+                    <hr class="bg-secondary mt-2 mb-2" />
+                    <div class="row g-1">
+                        <div class="col-6"><button id="exportBtn" class="btn btn-outline-light btn-sm w-100">📤 Export</button></div>
+                        <div class="col-6"><button id="importBtn" class="btn btn-outline-light btn-sm w-100">📥 Import</button></div>
+                    </div>
+                    <input type="file" id="importFile" accept=".json" style="display:none;" />
+                </div>
+            </div>
 
-                        <div id="battleLog" class="text-start mt-3 p-3 bg-light rounded text-dark" style="height: 150px; overflow-y: auto; font-family: monospace;">
-                            System: Defenses online. Awaiting entrenchment orders.
-                        </div>
+            <!-- Highscore Panel -->
+            <div class="card bg-dark text-white mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">🏆 Highscores</h6>
+                    <button id="exportScoresBtn" class="btn btn-outline-light btn-sm py-0" title="Export scores as JSON">📤</button>
+                </div>
+                <div class="card-body p-2">
+                    <div id="highscoreList" style="font-size:0.75rem; font-family: monospace;">
+                        <em class="text-secondary">No scores yet — launch a wave!</em>
                     </div>
                 </div>
             </div>
+
+            <div class="alert alert-info small text-start">
+                <strong>Tip:</strong> The Castle Keep is in the center. The horde spawns from all sides! Channel them using trenches and use Maxims to cover lanes.
+            </div>
+        </div>
+        
+        <div class="col-md-9 mb-4 mx-auto text-center">
+            <div class="bg-secondary p-2 rounded shadow d-inline-block w-100">
+                <canvas id="gameCanvas" width="800" height="800" style="max-width: 100%; height: auto;" class="border border-dark shadow-lg bg-dark"></canvas>
+            </div>
+            
+            <!-- Silly feedback area -->
+            <div id="battleLog" class="text-start mt-3 p-3 bg-light rounded text-dark" style="height: 150px; overflow-y: auto; font-family: monospace;">
+                System: Defenses online. Awaiting entrenchment orders.
+            </div>
+        </div>
+    </div>
+</div>
+
         </main>
     </div>
 
