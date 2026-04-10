@@ -2,6 +2,8 @@
 
 A calm, browser-based tower-defense game where you build defenses during an **Entrenchment Phase** and then sit back to watch the battle play out on its own — no reflexes required.
 
+Play from here: https://esoinila.github.io/HordeDefence/
+
 > **"Build your defenses, launch the horde, and enjoy the chaos."**
 
 ---
